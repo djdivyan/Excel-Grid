@@ -13,6 +13,11 @@ export class Grid {
     private scrollX: number = 0;
     private scrollY: number = 0;
 
+    //Row and Col headers
+    private rowHeaderWidth: number = 50;
+    private colHeaderHeight: number = 30;
+
+
     constructor(canvasId: string, totalRows: number, totalColumns: number) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -32,8 +37,8 @@ export class Grid {
     private updateSpacer(): void {
         const spacer = document.getElementById('grid-spacer') as HTMLDivElement;
         if(spacer) {
-            spacer.style.width = `${this.colManager.getTotalWidth()}px`;
-            spacer.style.height = `${this.rowManager.getTotalHeight()}px`;
+            spacer.style.width = `${this.colManager.getTotalWidth() + this.rowHeaderWidth}px`;
+            spacer.style.height = `${this.rowManager.getTotalHeight() + this.colHeaderHeight}px`;
         }
     }
 
@@ -55,7 +60,7 @@ export class Grid {
 
         this.ctx.beginPath();
         this.ctx.lineWidth = 1;
-        this.ctx.strokeStyle = '#b8b8b8';
+        this.ctx.strokeStyle = '#e0e0e0';
 
         //Skip cols and rows that are not visible
         //skip columns
@@ -81,25 +86,87 @@ export class Grid {
         //Start with colIndex that will be visible
         //vertical lines
         //stop if currentX moves out of canvas width or exceeds total columns
-        while (currentX - this.scrollX <= this.canvas.width && colIndex < this.colManager.totalColumns) {
-            let colX = currentX - this.scrollX;
-            this.ctx.moveTo(colX, 0);
+        let tempX = currentX;
+        let tempColIndex = colIndex;
+    
+        while (tempX - this.scrollX <= this.canvas.width && tempColIndex < this.colManager.totalColumns) {
+            let colX = (tempX - this.scrollX) + this.rowHeaderWidth; 
+            this.ctx.moveTo(colX, this.colHeaderHeight);
             this.ctx.lineTo(colX, this.canvas.height);
             
-            currentX += this.colManager.getWidth(colIndex);
-            colIndex++;
+            tempX += this.colManager.getWidth(tempColIndex);
+            tempColIndex++;
         }
 
 
         //horizontal lines
-        while(currentY - this.scrollY <= this.canvas.height && rowIndex < this.rowManager.totalRows){
-            let rowY = currentY - this.scrollY;
-            this.ctx.moveTo(0, rowY)
+        let tempY = currentY;
+        let tempRowIndex = rowIndex;
+        while(tempY - this.scrollY <= this.canvas.height && tempRowIndex < this.rowManager.totalRows){
+            let rowY = tempY - this.scrollY + this.colHeaderHeight;
+            this.ctx.moveTo(this.rowHeaderWidth, rowY)
             this.ctx.lineTo(this.canvas.width, rowY);
             
-            currentY += this.rowManager.getHeight(rowIndex);
-            rowIndex++;
+            tempY += this.rowManager.getHeight(tempRowIndex);
+            tempRowIndex++;
         }
         this.ctx.stroke();
+
+
+        //Create header Background 
+        this.ctx.fillStyle = '#f8f9fa';
+        this.ctx.fillRect(0,0,this.canvas.width, this.colHeaderHeight);
+        this.ctx.fillRect(0,0,this.rowHeaderWidth, this.canvas.height);
+
+        //header txt
+        this.ctx.fillStyle = "#333333";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.font = '13px sans-serif'
+
+        //Col headers Names filling
+        let tempHeaderX = currentX;
+        let tempColHeaderIndex = colIndex;
+    
+        while (tempHeaderX - this.scrollX <= this.canvas.width && tempColHeaderIndex < this.colManager.totalColumns) {
+            let width = this.colManager.getWidth(tempColHeaderIndex);
+            let colX = (tempHeaderX - this.scrollX) + this.rowHeaderWidth; 
+            
+            this.ctx.fillText(this.generateColNames(tempColHeaderIndex),colX+(width/2),this.colHeaderHeight/2);
+            this.ctx.strokeRect(colX,0,width,this.colHeaderHeight);
+            
+            tempHeaderX += this.colManager.getWidth(tempColIndex);
+            tempColHeaderIndex++;
+        }
+
+
+        //row headers Names filling
+        let tempHeaderY = currentY;
+        let tempRowHeaderIndex = rowIndex;
+        while(tempHeaderY - this.scrollY <= this.canvas.height && tempRowHeaderIndex < this.rowManager.totalRows){
+            let height = this.rowManager.getHeight(tempRowHeaderIndex);
+            let rowY = tempHeaderY - this.scrollY + this.colHeaderHeight;
+            this.ctx.fillText(`${tempRowHeaderIndex + 1}`,this.rowHeaderWidth/2,rowY+(height/2))
+            this.ctx.strokeRect(0,rowY,this.rowHeaderWidth,height);
+            tempHeaderY += this.rowManager.getHeight(tempRowHeaderIndex);
+            tempRowHeaderIndex++;
+        }
+
+        //Dark top left corner
+        this.ctx.fillStyle = '#e8eaed';
+        this.ctx.fillRect(0,0,this.rowHeaderWidth,this.colHeaderHeight);
+
+    }
+
+    private generateColNames(colNumber: number): string {
+        let colName = '';
+        let n = colNumber + 1; 
+
+        while (n > 0) {
+            colName = String.fromCharCode(65 + ((n - 1) % 26)) + colName;
+            n = Math.floor((n - ((n - 1) % 26)) / 26);
+        }
+        // console.log(`Col: ${colNumber} Name: ${colName}`);
+        return colName;
     }
 }
