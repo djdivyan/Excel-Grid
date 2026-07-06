@@ -1,4 +1,5 @@
 import { ColumnManager } from "./ColumnManager.js";
+import type { DataStore } from "./DataStore.js";
 import { RowManager } from "./RowManager.js";
 
 export class Grid {
@@ -17,14 +18,19 @@ export class Grid {
     private rowHeaderWidth: number = 50;
     private colHeaderHeight: number = 30;
 
+    //for storing data in grid
+    private dataStore: DataStore;
 
-    constructor(canvasId: string, totalRows: number, totalColumns: number) {
+
+    constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
         
         //To manage Height and Width resizing
         this.rowManager = new RowManager(totalRows);
         this.colManager = new ColumnManager(totalColumns);
+        
+        this.dataStore = dataStore;
 
         //handle window resize to adjust canvas size
         this.resizeCanvas();
@@ -57,6 +63,8 @@ export class Grid {
     public drawGrid(): void {
         //clearing the canvas for scrolling redraw
         this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
+
+        //First Draw lines, then fill data, then header bg and header text
 
         this.ctx.beginPath();
         this.ctx.lineWidth = 1;
@@ -112,6 +120,47 @@ export class Grid {
         }
         this.ctx.stroke();
 
+        //Filling data in cells
+        this.ctx.fillStyle = '#000000';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.font = '14px sans-serif';
+
+        //Filling Row Wise
+        let tempDataY = currentY;
+        let tempDataRowIdx = rowIndex;
+        while (tempDataY - this.scrollY <= this.canvas.height && tempDataRowIdx < this.rowManager.totalRows) {
+            let rowHeight = this.rowManager.getHeight(tempDataRowIdx);
+            let rowY = (tempDataY - this.scrollY) + this.colHeaderHeight;
+            
+            let tempDataX = currentX;
+            let tempDataColIdx = colIndex;
+            while (tempDataX - this.scrollX <= this.canvas.width && tempDataColIdx < this.colManager.totalColumns) {
+                let colWidth = this.colManager.getWidth(tempDataColIdx);
+                let colX = (tempDataX - this.scrollX) + this.rowHeaderWidth;
+
+                const cell = this.dataStore.getCell(tempDataRowIdx,tempDataColIdx);
+
+                if (cell) {
+                    //textCliping
+                    this.ctx.save(); 
+                    this.ctx.beginPath();
+                    this.ctx.rect(colX, rowY, colWidth, rowHeight); 
+                    this.ctx.clip();
+                    
+                    this.ctx.fillText(cell.value.toString(), colX+5, rowY+(rowHeight/2));
+                    
+                    this.ctx.restore();
+                }
+
+                tempDataX += colWidth;
+                tempDataColIdx++;
+            }
+
+            tempDataY += rowHeight;
+            tempDataRowIdx++;
+        }
+
 
         //Create header Background 
         this.ctx.fillStyle = '#f8f9fa';
@@ -122,7 +171,7 @@ export class Grid {
         this.ctx.fillStyle = "#333333";
         this.ctx.textAlign = "center";
         this.ctx.textBaseline = "middle";
-        this.ctx.font = '13px sans-serif'
+        this.ctx.font = '14px sans-serif'
 
         //Col headers Names filling
         let tempHeaderX = currentX;
@@ -135,7 +184,7 @@ export class Grid {
             this.ctx.fillText(this.generateColNames(tempColHeaderIndex),colX+(width/2),this.colHeaderHeight/2);
             this.ctx.strokeRect(colX,0,width,this.colHeaderHeight);
             
-            tempHeaderX += this.colManager.getWidth(tempColIndex);
+            tempHeaderX += width;
             tempColHeaderIndex++;
         }
 
@@ -146,9 +195,11 @@ export class Grid {
         while(tempHeaderY - this.scrollY <= this.canvas.height && tempRowHeaderIndex < this.rowManager.totalRows){
             let height = this.rowManager.getHeight(tempRowHeaderIndex);
             let rowY = tempHeaderY - this.scrollY + this.colHeaderHeight;
+            
             this.ctx.fillText(`${tempRowHeaderIndex + 1}`,this.rowHeaderWidth/2,rowY+(height/2))
             this.ctx.strokeRect(0,rowY,this.rowHeaderWidth,height);
-            tempHeaderY += this.rowManager.getHeight(tempRowHeaderIndex);
+            
+            tempHeaderY += height;
             tempRowHeaderIndex++;
         }
 
