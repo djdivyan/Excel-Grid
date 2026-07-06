@@ -17,4 +17,9 @@ export class ColumnManager {
         this.customWidths.set(index,width);
     }
 
+
+    public getTotalWidth(): number {
+        return this.totalColumns * this.defaultWidth;
+    }
+
 }

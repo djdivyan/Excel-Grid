@@ -23,9 +23,18 @@ export class Grid {
 
         //handle window resize to adjust canvas size
         this.resizeCanvas();
+        this.updateSpacer();
         window.addEventListener('resize', () => this.resizeCanvas());
         
         this.drawGrid();
+    }
+
+    private updateSpacer(): void {
+        const spacer = document.getElementById('grid-spacer') as HTMLDivElement;
+        if(spacer) {
+            spacer.style.width = `${this.colManager.getTotalWidth()}px`;
+            spacer.style.height = `${this.rowManager.getTotalHeight()}px`;
+        }
     }
 
     private resizeCanvas(): void {

@@ -15,4 +15,8 @@ export class RowManager {
     public setHeight(index: number,height:number): void{
         this.customHeights.set(index,height);
     }
+
+    public getTotalHeight(): number {
+        return this.totalRows * this.defaultHeight;
+    }
 }
