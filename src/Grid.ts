@@ -1,6 +1,7 @@
 import { ColumnManager } from "./ColumnManager.js";
 import type { CommandManager } from "./Command/CommandManager.js";
 import { EditCommand } from "./Command/EditCommand.js";
+import { ColumnResizeCommand, RowResizeCommand } from "./Command/ResizeCommands.js";
 import type { DataStore } from "./DataStore.js";
 import { RowManager } from "./RowManager.js";
 import { Selection } from "./Selection.js";
@@ -32,6 +33,13 @@ export class Grid {
     //Edit Input box 
     private activeInput: HTMLInputElement | null = null;
 
+    //Resizing 
+    private isResizingCol: boolean = false;
+    private isResizingRow: boolean = false;
+    private resizeIndex: number = -1;
+    private oldSize: number = 0;
+    private startMousePos: number = 0;
+
     constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore, commandManager: CommandManager) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -59,7 +67,7 @@ export class Grid {
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
     
-        //TODO: ESC to be hide and reset Selection
+        //ESC to be hide and reset Selection and commit
         window.addEventListener('keydown',(e) => {
             if(e.key === 'Escape'){
                 e.preventDefault();
@@ -95,6 +103,19 @@ export class Grid {
         let mouseX = e.clientX - rect.left;
         let mouseY = e.clientY - rect.top;
 
+        //Check if its on header
+        if(mouseY < this.colHeaderHeight && this.canvas.style.cursor === 'col-resize'){
+            this.isResizingCol = true;
+            this.startMousePos = mouseX;
+            return;
+        }
+
+        if(mouseX < this.rowHeaderWidth && this.canvas.style.cursor === 'row-resize'){
+            this.isResizingRow = true;
+            this.startMousePos = mouseY;
+            return;
+        }
+
         const {row,col} = this.convertToCell(mouseX,mouseY);
         // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
 
@@ -105,27 +126,114 @@ export class Grid {
     }
 
     private handleMouseMove(e:MouseEvent): void {
-        if(!this.selection.isSelecting) return;
 
         let rect = this.canvas.getBoundingClientRect();
         //X and Y positions on canvas
         let mouseX = e.clientX - rect.left;
         let mouseY = e.clientY - rect.top;
 
-        const {row,col} = this.convertToCell(mouseX,mouseY);
-        //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
-        
-        if(row >= 0 && col >= 0){
-            //if new cell
-            if (this.selection.endRow !== row || this.selection.endCol !== col) {
-                this.selection.setEnd(row,col);
-                this.drawGrid();
+        //Col resize
+        if (this.isResizingCol) {
+            const diff = mouseX - this.startMousePos;
+            const newWidth = Math.max(60,this.oldSize + diff);
+            
+            this.colManager.setWidth(this.resizeIndex, newWidth);
+            this.updateSpacer();
+            this.drawGrid();
+            return;
+        }
+        //Row resize
+        if (this.isResizingRow) {
+            const diff = mouseY - this.startMousePos;
+            const newHeight = Math.max(20,this.oldSize + diff);
+            
+            this.rowManager.setHeight(this.resizeIndex, newHeight);
+            this.updateSpacer();
+            this.drawGrid();
+            return;
+        }
+
+        //hover detect
+        this.canvas.style.cursor = 'default';
+        this.resizeIndex = -1;
+
+        //col header hover
+        if(mouseX > this.rowHeaderWidth && mouseY < this.colHeaderHeight){
+            let currentX = 0;
+            let colIndex = 0;
+            
+            while (currentX - this.scrollX <= this.canvas.width && colIndex < this.colManager.totalColumns) {
+                //visible onscreen
+                if (currentX + this.colManager.getWidth(colIndex) >= this.scrollX) {
+                    let rightEdge = (currentX - this.scrollX) + this.rowHeaderWidth + this.colManager.getWidth(colIndex);
+                    if (Math.abs(mouseX - rightEdge) < 4) {
+                        this.canvas.style.cursor = 'col-resize'; 
+                        this.resizeIndex = colIndex;             
+                        this.oldSize = this.colManager.getWidth(colIndex); 
+                        break;
+                    }
+                }
+                currentX += this.colManager.getWidth(colIndex);
+                colIndex++;
+            }
+        }
+
+        //row header hover
+        if (mouseX < this.rowHeaderWidth && mouseY > this.colHeaderHeight) {
+            let currentY = 0;
+            let rowIndex = 0;
+            while (currentY - this.scrollY <= this.canvas.height && rowIndex < this.rowManager.totalRows) {
+                if (currentY + this.rowManager.getHeight(rowIndex) >= this.scrollY) {
+                    let bottomEdge = (currentY - this.scrollY) + this.colHeaderHeight + this.rowManager.getHeight(rowIndex);
+                    if (Math.abs(mouseY - bottomEdge) < 4) {
+                        this.canvas.style.cursor = 'row-resize';
+                        this.resizeIndex = rowIndex;
+                        this.oldSize = this.rowManager.getHeight(rowIndex);
+                        break;
+                    }
+                }
+                currentY += this.rowManager.getHeight(rowIndex);
+                rowIndex++;
+            }
+        }
+
+        if (this.selection.isSelecting && !this.isResizingCol && !this.isResizingRow) {
+            const {row,col} = this.convertToCell(mouseX,mouseY);
+            //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
+            if(row >= 0 && col >= 0){
+                //if new cell
+                if (this.selection.endRow !== row || this.selection.endCol !== col) {
+                    this.selection.setEnd(row,col);
+                    this.drawGrid();
+                }
             }
         }
     }
 
 
     private handleMouseUp(): void {
+        //end Col resizing
+        if (this.isResizingCol) {
+            this.isResizingCol = false; 
+            const finalWidth = this.colManager.getWidth(this.resizeIndex);
+
+            if (finalWidth !== this.oldSize) {
+                const command = new ColumnResizeCommand(this.colManager, this.resizeIndex, this.oldSize, finalWidth);
+                this.commandManager.executeCommand(command);
+            }
+        }
+
+        //end Row resizing 
+        if(this.isResizingRow){
+            this.isResizingRow = false;
+            const finalHeight = this.rowManager.getHeight(this.resizeIndex);
+            if(finalHeight !== this.oldSize) {
+                const command = new RowResizeCommand(this.rowManager, this.resizeIndex, this.oldSize,finalHeight);
+                this.commandManager.executeCommand(command);
+            }
+        }
+
+        
         if (this.selection.isSelecting) {
             this.selection.finishSelecting();
         }
