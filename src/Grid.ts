@@ -1,4 +1,6 @@
 import { ColumnManager } from "./ColumnManager.js";
+import type { CommandManager } from "./Command/CommandManager.js";
+import { EditCommand } from "./Command/EditCommand.js";
 import type { DataStore } from "./DataStore.js";
 import { RowManager } from "./RowManager.js";
 import { Selection } from "./Selection.js";
@@ -25,7 +27,12 @@ export class Grid {
     //for Selection
     public selection:Selection;
 
-    constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore) {
+    private commandManager: CommandManager;
+    
+    //Edit Input box 
+    private activeInput: HTMLInputElement | null = null;
+
+    constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore, commandManager: CommandManager) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
         
@@ -35,7 +42,8 @@ export class Grid {
 
         this.dataStore = dataStore;
         this.selection = new Selection();
-        
+        this.commandManager = commandManager;
+
         this.startMouseEvents();
 
         //handle window resize to adjust canvas size
@@ -50,9 +58,79 @@ export class Grid {
         this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
-        
+    
         //TODO: ESC to be hide and reset Selection
+        window.addEventListener('keydown',(e) => {
+            if(e.key === 'Escape'){
+                e.preventDefault();
+                this.selection.reset();
+                this.drawGrid();
+                //Commit any edited data
+                if (this.activeInput) {
+                    this.activeInput.blur(); 
+                }
+            } 
+        });
+        //double click listener for edit cell
+        this.canvas.addEventListener('dblclick',(e) => this.handleDoubleClick(e))
     }
+
+    //For Edit cell
+    public handleDoubleClick(e: MouseEvent): any {
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const {row, col} = this.convertToCell(mouseX,mouseY);
+        
+        if (row>= 0 && col>= 0) {
+            //show a dynamic input box
+            this.showEditor(row,col);
+        }
+    }
+    
+    private handleMouseDown(e: MouseEvent): void {
+        let rect = this.canvas.getBoundingClientRect();
+        //X and Y positions on canvas
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        const {row,col} = this.convertToCell(mouseX,mouseY);
+        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
+
+        if(row >= 0 && col >= 0){
+            this.selection.setStart(row,col);
+            this.drawGrid();
+        }
+    }
+
+    private handleMouseMove(e:MouseEvent): void {
+        if(!this.selection.isSelecting) return;
+
+        let rect = this.canvas.getBoundingClientRect();
+        //X and Y positions on canvas
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        const {row,col} = this.convertToCell(mouseX,mouseY);
+        //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
+        
+        if(row >= 0 && col >= 0){
+            //if new cell
+            if (this.selection.endRow !== row || this.selection.endCol !== col) {
+                this.selection.setEnd(row,col);
+                this.drawGrid();
+            }
+        }
+    }
+
+
+    private handleMouseUp(): void {
+        if (this.selection.isSelecting) {
+            this.selection.finishSelecting();
+        }
+    }
+
 
     //converting mouse x,y to row,col 
     private convertToCell(x: number, y:number): {row: number, col:number}{
@@ -89,48 +167,6 @@ export class Grid {
         }
         return {row:rowIdx, col:colIdx}
     }
-    
-    private handleMouseDown(e: MouseEvent): void {
-        let rect = this.canvas.getBoundingClientRect();
-        //X and Y positions on canvas
-        let mouseX = e.clientX - rect.left;
-        let mouseY = e.clientY - rect.top;
-
-        const {row,col} = this.convertToCell(mouseX,mouseY);
-        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
-
-        if(row >= 0 && col >= 0){
-            this.selection.setStart(row,col);
-            this.drawGrid();
-        }
-    }
-
-    private handleMouseMove(e:MouseEvent): void {
-        if(!this.selection.isSelecting) return;
-
-        let rect = this.canvas.getBoundingClientRect();
-        //X and Y positions on canvas
-        let mouseX = e.clientX - rect.left;
-        let mouseY = e.clientY - rect.top;
-
-        const {row,col} = this.convertToCell(mouseX,mouseY);
-        console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
-        
-        if(row >= 0 && col >= 0){
-            //if new cell
-            if (this.selection.endRow !== row || this.selection.endCol !== col) {
-                this.selection.setEnd(row,col);
-                this.drawGrid();
-            }
-        }
-    }
-
-
-    private handleMouseUp(): void {
-        if (this.selection.isSelecting) {
-            this.selection.finishSelecting();
-        }
-    }
 
     private updateSpacer(): void {
         const spacer = document.getElementById('grid-spacer') as HTMLDivElement;
@@ -147,11 +183,92 @@ export class Grid {
     }
 
     public setScroll(x: number, y: number): void {
+        if (this.activeInput) {
+            this.activeInput.blur(); 
+        }
+
         this.scrollX = x;
         this.scrollY = y;
         this.drawGrid();
     }
 
+    public showEditor(row: number, col: number) {
+        //getting the X,Y,Height,width to get the size for input box 
+        let x = 0;
+        for (let i = 0; i < col; i++) {
+            x += this.colManager.getWidth(i);
+        }
+
+        let y = 0;
+        for (let i = 0; i < row; i++) {
+            y += this.rowManager.getHeight(i);
+        }
+
+        const height = this.rowManager.getHeight(row);
+        const width = this.colManager.getWidth(col);
+
+        const visualX = (x - this.scrollX) + this.rowHeaderWidth;
+        const visualY = (y - this.scrollY) + this.colHeaderHeight;
+
+        //creating input element
+        const input = document.createElement('input');
+        input.style.position = 'fixed'; 
+
+        //Match styling
+        input.style.backgroundColor = "#fff";
+        input.style.color = "#000";
+        input.style.opacity = "1";
+        input.style.zIndex = "20";
+        input.style.border = '2px solid #0078d7';
+        input.style.outline = 'none';
+        input.style.font = '14px sans-serif';
+        input.style.padding = '0 4px';
+        input.style.boxSizing = 'border-box';
+
+        
+        const rect = this.canvas.getBoundingClientRect();
+        input.style.left = `${rect.left + visualX}px`;
+        input.style.top = `${rect.top + visualY}px`;
+        input.style.height = `${height}px`;
+        input.style.width = `${width}px`
+
+        //Check for existing data
+        const existingCell = this.dataStore.getCell(row, col);
+        const oldValue = existingCell ? existingCell.value.toString() : '';
+        input.value = oldValue;
+
+        document.body.appendChild(input);
+        input.focus();
+        this.activeInput = input;
+
+        //saving
+        let isCommitted = false;
+        const commit  = () => {
+            if(isCommitted) return;
+            isCommitted = true;
+
+            const newValue = input.value;
+
+            if (oldValue !== newValue) {
+                const editCommand = new EditCommand(this.dataStore,row,col,newValue,oldValue);
+                this.commandManager.executeCommand(editCommand);
+
+                //redraw updated data
+                this.drawGrid();
+            }
+
+            //removing input box
+            input.remove();
+            this.activeInput = null;
+        }
+
+        //commit func trigger
+        input.addEventListener('blur',commit);
+        input.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') commit();
+        });
+
+    }
     public drawGrid(): void {
         //clearing the canvas for scrolling redraw
         this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
@@ -181,7 +298,7 @@ export class Grid {
             rowIndex++;
         }
 
-        console.log(`Skipped to row ${rowIndex} and col ${colIndex}`)
+        //console.log(`Skipped to row ${rowIndex} and col ${colIndex}`)
 
         //Start with colIndex that will be visible
         //vertical lines
