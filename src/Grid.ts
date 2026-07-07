@@ -1,6 +1,7 @@
 import { ColumnManager } from "./ColumnManager.js";
 import type { DataStore } from "./DataStore.js";
 import { RowManager } from "./RowManager.js";
+import { Selection } from "./Selection.js";
 
 export class Grid {
     private canvas: HTMLCanvasElement;
@@ -21,6 +22,8 @@ export class Grid {
     //for storing data in grid
     private dataStore: DataStore;
 
+    //for Selection
+    public selection:Selection;
 
     constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -29,8 +32,11 @@ export class Grid {
         //To manage Height and Width resizing
         this.rowManager = new RowManager(totalRows);
         this.colManager = new ColumnManager(totalColumns);
-        
+
         this.dataStore = dataStore;
+        this.selection = new Selection();
+        
+        this.startMouseEvents();
 
         //handle window resize to adjust canvas size
         this.resizeCanvas();
@@ -38,6 +44,92 @@ export class Grid {
         window.addEventListener('resize', () => this.resizeCanvas());
         
         this.drawGrid();
+    }
+    //down,move and up
+    private startMouseEvents() {
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+        
+        //TODO: ESC to be hide and reset Selection
+    }
+
+    //converting mouse x,y to row,col 
+    private convertToCell(x: number, y:number): {row: number, col:number}{
+        //find column
+        let currentX = 0;
+        let colIdx = 0;
+        //new X considering scroll and headers
+        let newX = x - this.rowHeaderWidth + this.scrollX;
+
+        //Clicked on header
+        if (x < this.rowHeaderWidth) colIdx = -1;
+        else {
+            while (currentX <= newX && colIdx < this.colManager.totalColumns) {
+                currentX += this.colManager.getWidth(colIdx);
+                if (currentX> newX) break;
+                colIdx++;
+            }
+        }
+
+        //find row
+        let currentY = 0;
+        let rowIdx = 0;
+        //new Y considering scroll and headers
+        let newY = y - this.colHeaderHeight + this.scrollY;
+
+        //Clicked on header
+        if (y < this.colHeaderHeight) rowIdx = -1;
+        else {
+            while (currentY <= newY && rowIdx < this.rowManager.totalRows) {
+                currentY += this.rowManager.getHeight(rowIdx);
+                if (currentY > newY) break;
+                rowIdx++;
+            }
+        }
+        return {row:rowIdx, col:colIdx}
+    }
+    
+    private handleMouseDown(e: MouseEvent): void {
+        let rect = this.canvas.getBoundingClientRect();
+        //X and Y positions on canvas
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        const {row,col} = this.convertToCell(mouseX,mouseY);
+        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
+
+        if(row >= 0 && col >= 0){
+            this.selection.setStart(row,col);
+            this.drawGrid();
+        }
+    }
+
+    private handleMouseMove(e:MouseEvent): void {
+        if(!this.selection.isSelecting) return;
+
+        let rect = this.canvas.getBoundingClientRect();
+        //X and Y positions on canvas
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
+
+        const {row,col} = this.convertToCell(mouseX,mouseY);
+        console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
+        
+        if(row >= 0 && col >= 0){
+            //if new cell
+            if (this.selection.endRow !== row || this.selection.endCol !== col) {
+                this.selection.setEnd(row,col);
+                this.drawGrid();
+            }
+        }
+    }
+
+
+    private handleMouseUp(): void {
+        if (this.selection.isSelecting) {
+            this.selection.finishSelecting();
+        }
     }
 
     private updateSpacer(): void {
@@ -161,8 +253,37 @@ export class Grid {
             tempDataRowIdx++;
         }
 
+        if (this.selection.isActive()) {
+            const bounds = this.selection.getSelection();
+            
+            let selX = 0;
+            for (let i = 0; i < bounds.minCol; i++) selX += this.colManager.getWidth(i);
+            
+            let selY = 0;
+            for (let i = 0; i < bounds.minRow; i++) selY += this.rowManager.getHeight(i);
+
+            let selW = 0;
+            for (let i = bounds.minCol; i <= bounds.maxCol; i++) selW += this.colManager.getWidth(i);
+            
+            let selH = 0;
+            for (let i = bounds.minRow; i <= bounds.maxRow; i++) selH += this.rowManager.getHeight(i);
+
+            const visualSelX = (selX - this.scrollX) + this.rowHeaderWidth;
+            const visualSelY = (selY - this.scrollY) + this.colHeaderHeight;
+
+            //Translucent blue rectangle
+            //15% opacity blue
+            this.ctx.fillStyle = 'rgba(0, 118, 215, 0.15)'; 
+            this.ctx.fillRect(visualSelX, visualSelY, selW, selH);
+
+            //Solid border line
+            this.ctx.strokeStyle = '#0078d7'; 
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(visualSelX, visualSelY, selW, selH);
+        }
 
         //Create header Background 
+        this.ctx.strokeStyle = '#e0e0e0';
         this.ctx.fillStyle = '#f8f9fa';
         this.ctx.fillRect(0,0,this.canvas.width, this.colHeaderHeight);
         this.ctx.fillRect(0,0,this.rowHeaderWidth, this.canvas.height);
