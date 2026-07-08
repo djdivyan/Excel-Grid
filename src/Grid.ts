@@ -117,10 +117,18 @@ export class Grid {
         }
 
         const {row,col} = this.convertToCell(mouseX,mouseY);
-        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
+        console.log(`Mouse Down Triggered on CELL ${row},${col}`);
 
         if(row >= 0 && col >= 0){
             this.selection.setStart(row,col);
+            this.drawGrid();
+        } else if(row >= 0 && col < 0 ){
+            this.selection.setStart(row,0);
+            this.selection.setEnd(row,this.colManager.totalColumns);
+            this.drawGrid();
+        } else if(row < 0 && col >= 0){
+            this.selection.setStart(0,col);
+            this.selection.setEnd(this.rowManager.totalRows,col);
             this.drawGrid();
         }
     }
@@ -135,7 +143,7 @@ export class Grid {
         //Col resize
         if (this.isResizingCol) {
             const diff = mouseX - this.startMousePos;
-            const newWidth = Math.max(60,this.oldSize + diff);
+            const newWidth = Math.min(400,Math.max(50,this.oldSize + diff));
             
             this.colManager.setWidth(this.resizeIndex, newWidth);
             this.updateSpacer();
@@ -145,7 +153,9 @@ export class Grid {
         //Row resize
         if (this.isResizingRow) {
             const diff = mouseY - this.startMousePos;
-            const newHeight = Math.max(20,this.oldSize + diff);
+            //newHeight considering min and max
+            let newHeight = Math.min(300,Math.max(20,this.oldSize + diff));
+            
             
             this.rowManager.setHeight(this.resizeIndex, newHeight);
             this.updateSpacer();
@@ -171,8 +181,10 @@ export class Grid {
                         this.resizeIndex = colIndex;             
                         this.oldSize = this.colManager.getWidth(colIndex); 
                         break;
+                    } else {
+                        this.canvas.style.cursor = 'pointer';
                     }
-                }
+                } 
                 currentX += this.colManager.getWidth(colIndex);
                 colIndex++;
             }
@@ -190,6 +202,8 @@ export class Grid {
                         this.resizeIndex = rowIndex;
                         this.oldSize = this.rowManager.getHeight(rowIndex);
                         break;
+                    } else {
+                        this.canvas.style.cursor = 'pointer';
                     }
                 }
                 currentY += this.rowManager.getHeight(rowIndex);
@@ -362,21 +376,90 @@ export class Grid {
                 this.commandManager.executeCommand(editCommand);
 
                 //redraw updated data
+                this.dataStore.recalculateAll();
                 this.drawGrid();
+
             }
 
             //removing input box
             input.remove();
             this.activeInput = null;
-        }
+            
+            //remove suggestion
+            const existingPopup = document.getElementById('suggestion');
+            if (existingPopup) existingPopup.remove();
+        };
+
+        const showPopUp = () => {
+            const existingPopup = document.getElementById('suggestion');
+            if (existingPopup) existingPopup.remove();
+
+            if (this.isFormula) {
+                console.log('isFormula is true');
+                
+                const suggestion = document.createElement('div');
+                suggestion.id = 'suggestion';
+                
+                //styling to place below input box
+                suggestion.style.position = 'fixed';
+                suggestion.style.left = input.style.left;
+                suggestion.style.top = `calc(${input.style.top} + ${input.style.height})`;
+                suggestion.style.width = input.style.width;
+                suggestion.style.zIndex = "21"; 
+                suggestion.style.backgroundColor = "#fff";
+                suggestion.style.border = "1px solid #ccc";
+
+                const ul = document.createElement('ul');
+                ul.style.listStyle = 'none';
+                ul.style.margin = '0';
+                ul.style.padding = '4px 0';
+                
+                //COUNT, MIN, MAX, SUM
+                const formulas = ["COUNT(A1:B3)","MIN(A1:B3)","MAX(A1:B3)","SUM(A1:B3)"];
+
+                //add in popup
+                for (let i = 0; i < formulas.length; i++) {
+                    const li = document.createElement('li');
+                    li.id = `${formulas[i]}`;
+                    li.innerText = `${formulas[i]}`;
+                    li.style.padding = '4px 8px';
+                    li.style.cursor = 'pointer';
+                    li.onmousedown = (e) => {
+                        e.preventDefault();
+                        input.value = `=${li.innerText}`;
+                        const existingPopup = document.getElementById('suggestion');
+                        if (existingPopup) existingPopup.remove();
+                    };
+                    ul.appendChild(li);
+                }
+            
+                suggestion.appendChild(ul);
+                document.body.appendChild(suggestion);
+            }
+        }; 
+        
 
         //commit func trigger
         input.addEventListener('blur',commit);
         input.addEventListener('keydown', (e) => {
             if(e.key === 'Enter') commit();
         });
-
+        input.addEventListener('input', (e) => {
+            this.handleFormulaInput(input.value);
+            showPopUp();
+        });
     }
+
+    private isFormula:boolean = false;
+    private handleFormulaInput(input: string) {
+        if (input.startsWith('=')) {
+            this.isFormula = true;
+        } else {
+            this.isFormula = false;
+        }
+    }
+
+    
     public drawGrid(): void {
         //clearing the canvas for scrolling redraw
         this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
@@ -465,7 +548,7 @@ export class Grid {
                     this.ctx.rect(colX, rowY, colWidth, rowHeight); 
                     this.ctx.clip();
                     
-                    this.ctx.fillText(cell.value.toString(), colX+5, rowY+(rowHeight/2));
+                    this.ctx.fillText(cell.displayValue.toString(), colX+5, rowY+(rowHeight/2));
                     
                     this.ctx.restore();
                 }

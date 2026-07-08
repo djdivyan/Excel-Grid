@@ -27,3 +27,7 @@ canvas {
     display: block;
     z-index: 10;
 }
+
+li:hover {
+  background-color: lightgrey;
+}

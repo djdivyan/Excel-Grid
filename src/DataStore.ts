@@ -1,4 +1,5 @@
 import { Cell } from "./Cell.js";
+import { FormulaParser } from "./FormulaParser.js";
 import type { Employee } from "./interfaces/Employee.js";
 
 export class DataStore {
@@ -7,6 +8,16 @@ export class DataStore {
 
     public setCell(row:number, col:number, value: string | number): void {
         this.cells.set(`${row},${col}`,new Cell(value));
+    }
+
+    public recalculateAll(): void {
+        this.cells.forEach((cell) => {
+            if (typeof cell.value === 'string' && cell.value.startsWith('=')) {
+                cell.displayValue = FormulaParser.evaluate(cell.value, this);
+            } else {
+                cell.displayValue = cell.value;
+            }
+        });
     }
 
     public getCell(row:number, col:number): Cell | undefined{
