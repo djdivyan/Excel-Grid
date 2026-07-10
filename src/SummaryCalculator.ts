@@ -29,6 +29,6 @@ export class SummaryCalculator {
         }
         const avg = sum / count;
         
-        return `Count: ${count}   Average: ${avg.toFixed(2)}   Sum: ${sum}   Min: ${min}   Max: ${max}`;
+        return `Count:${count}   Average:${avg.toFixed(2)}   Sum:${sum}   Min:${min}   Max:${max}`;
     }
 }

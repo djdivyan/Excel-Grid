@@ -17,6 +17,6 @@ export class RowManager {
     }
 
     public getTotalHeight(): number {
-        return this.totalRows * this.defaultHeight;
+        return this.totalRows * this.defaultHeight; 
     }
 }

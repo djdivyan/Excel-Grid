@@ -99,16 +99,8 @@ export class Grid {
             if(e.key === 'ArrowDown' ){
                  e.preventDefault();
                 const {minRow, minCol} = this.selection.getSelection();
-                console.log(`row: ${minRow}, col: ${minCol}`);
-                this.selection.setStart(minRow+1,minCol);
-                if (this.selection.isSelecting) {
-                    this.selection.finishSelecting();
-                }
-                this.drawGrid();
-                this.updateStatusBar();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
+                if(minRow < this.rowManager.totalRows - 1){
+                    this.moveSelection(minRow+1,minCol);
                 }
             } 
             if(e.key === 'ArrowUp'){
@@ -116,16 +108,7 @@ export class Grid {
                 const {minRow, minCol} = this.selection.getSelection();
                 console.log(`row: ${minRow}, col: ${minCol}`);
                 if (minRow>0) {
-                    this.selection.setStart(minRow-1,minCol);
-                }
-                if (this.selection.isSelecting) {
-                    this.selection.finishSelecting();
-                }
-                this.drawGrid();
-                this.updateStatusBar();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
+                    this.moveSelection(minRow-1,minCol);
                 }
             } 
             if(e.key === 'ArrowLeft' && !this.editManager.isEditing()){
@@ -133,31 +116,14 @@ export class Grid {
                 const {minRow, minCol} = this.selection.getSelection();
                 console.log(`row: ${minRow}, col: ${minCol}`);
                 if (minCol > 0) {
-                    this.selection.setStart(minRow,minCol-1);
-                }
-                if (this.selection.isSelecting) {
-                    this.selection.finishSelecting();
-                }
-                this.drawGrid();
-                this.updateStatusBar();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
+                    this.moveSelection(minRow, minCol - 1);
                 }
             } 
             if(e.key === 'ArrowRight' && !this.editManager.isEditing()){
                 e.preventDefault();
                 const {minRow, minCol} = this.selection.getSelection();
-                console.log(`row: ${minRow}, col: ${minCol}`);
-                this.selection.setStart(minRow,minCol+1);
-                if (this.selection.isSelecting) {
-                    this.selection.finishSelecting();
-                }
-                this.drawGrid();
-                this.updateStatusBar();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
+                if(minRow < this.colManager.totalColumns - 1){
+                    this.moveSelection(minRow, minCol + 1);
                 }
             } 
         });
@@ -241,7 +207,7 @@ export class Grid {
             //newHeight considering min and max
             let newHeight = Math.min(300,Math.max(20,this.oldSize + diff));
             
-            
+
             this.rowManager.setHeight(this.resizeIndex, newHeight);
             this.updateSpacer();
             this.drawGrid();
@@ -424,5 +390,57 @@ export class Grid {
         );
 
         statusBar!.innerText = result
+    }
+
+
+    private ensureCellIsVisible(row: number, col:number): void{
+        //getting the X,Y,Height,widt
+        let x = 0;
+        for (let i = 0; i < col; i++){
+            x += this.colManager.getWidth(i);
+        } 
+
+        let y = 0;
+        for (let i = 0; i < row; i++) {
+            y += this.rowManager.getHeight(i);
+        }
+
+        const height = this.rowManager.getHeight(row);
+        const width = this.colManager.getWidth(col);
+
+        const visibleWidth = this.canvas.width - this.rowHeaderWidth;
+        const visibleHeight = this.canvas.height - this.colHeaderHeight;
+
+        if (x < this.scrollX) {
+            this.scrollX = x;
+        }else if (x + width > this.scrollX + visibleWidth){
+            this.scrollX = x + width - visibleWidth + 17;
+        }
+
+        if (y < this.scrollY) {
+            this.scrollY = y;
+        }else if (y + height > this.scrollY + visibleHeight - 45){
+            this.scrollY = y + height - visibleHeight + 45;
+        }
+
+        const container = document.getElementById('grid-container') as HTMLDivElement;
+        container.scrollLeft = this.scrollX;
+        container.scrollTop = this.scrollY;
+    } 
+
+    private moveSelection(row: number, col: number): void{
+        this.selection.setStart(row,col);
+        if (this.selection.isSelecting) {
+            this.selection.finishSelecting();
+        }
+
+        this.ensureCellIsVisible(row,col);
+
+        this.drawGrid();
+        this.updateStatusBar();
+
+        if(this.editManager.isEditing()){
+            this.editManager.blurEditor();
+        }
     }
 }
