@@ -1,10 +1,10 @@
-import type { Command } from "../interfaces/Command.js";
+import type { ICommand } from "../interfaces/ICommand.js";
 
 export class CommandManager {
-    private undoStack: Command[] = [];
-    private redoStack: Command[] = [];
+    private undoStack: ICommand[] = [];
+    private redoStack: ICommand[] = [];
 
-    public executeCommand(command: Command): void {
+    public executeCommand(command: ICommand): void {
         command.execute();         
         this.undoStack.push(command);
         this.redoStack = [];

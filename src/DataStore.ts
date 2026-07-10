@@ -1,6 +1,6 @@
 import { Cell } from "./Cell.js";
 import { FormulaParser } from "./FormulaParser.js";
-import type { Employee } from "./interfaces/Employee.js";
+import type { IEmployee } from "./interfaces/IEmployee.js";
 
 export class DataStore {
     //key will be row,col
@@ -23,11 +23,11 @@ export class DataStore {
     public getCell(row:number, col:number): Cell | undefined{
         return this.cells.get(`${row},${col}`);
     }
-
+    
     public async loadJsonData(url: string): Promise<void>{
         try {
             const response = await fetch(url);
-            const data: Employee[] = await response.json();
+            const data: IEmployee[] = await response.json();
             //Row 0 for headers
             const headers = ["ID", "First Name", "Last Name", "Age", "Salary"];
 
@@ -35,7 +35,7 @@ export class DataStore {
                 this.setCell(0, col, header);
             });
 
-            data.forEach((record: Employee, index: number) => {
+            data.forEach((record: IEmployee, index: number) => {
                 const row = index + 1; //Start at Row 1
                 this.setCell(row, 0, record.id);
                 this.setCell(row, 1, record.firstName);

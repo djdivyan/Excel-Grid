@@ -1,7 +1,7 @@
 import type { DataStore } from "../DataStore.js";
-import type { Command } from "../interfaces/Command.js";
+import type { ICommand } from "../interfaces/ICommand.js";
 
-export class EditCommand implements Command {
+export class EditCommand implements ICommand {
     constructor(
         private dataStore:DataStore,
         private row:number, 

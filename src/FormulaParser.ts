@@ -14,11 +14,15 @@ export class FormulaParser {
         if(typeof formula !== 'string' || !formula.startsWith('=')){
             return formula;
         }
+        
+        const originalText = formula;
+        formula = formula.split(" ").join("");
+
         //func, startCol,startRow:endCol,endRow
         const match = formula.match(/^=([A-Z]+)\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)$/i);
 
         console.log(match);
-        if (!match) return "#ERROR";
+        if (!match) return originalText;
 
         const [,func,startColStr,startRowStr,endColStr,endRowStr] = match;
 

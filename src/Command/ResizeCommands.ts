@@ -1,8 +1,8 @@
 import type { ColumnManager } from "../ColumnManager.js";
-import type { Command } from "../interfaces/Command.js";
+import type { ICommand } from "../interfaces/ICommand.js";
 import type { RowManager } from "../RowManager.js";
 
-export class ColumnResizeCommand implements Command {
+export class ColumnResizeCommand implements ICommand {
     constructor(
         private colManager: ColumnManager,
         private colIndex: number,
@@ -18,7 +18,7 @@ export class ColumnResizeCommand implements Command {
     }
 }
 
-export class RowResizeCommand implements Command {
+export class RowResizeCommand implements ICommand {
     constructor(
         private rowManager: RowManager,
         private rowIndex: number,

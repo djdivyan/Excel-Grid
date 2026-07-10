@@ -3,13 +3,15 @@ import type { CommandManager } from "./Command/CommandManager.js";
 import { EditCommand } from "./Command/EditCommand.js";
 import { ColumnResizeCommand, RowResizeCommand } from "./Command/ResizeCommands.js";
 import type { DataStore } from "./DataStore.js";
+import { EditManager } from "./EditManager.js";
+import { GridRenderer } from "./GridRenderer.js";
 import { RowManager } from "./RowManager.js";
 import { Selection } from "./Selection.js";
+import { SummaryCalculator } from "./SummaryCalculator.js";
 
 export class Grid {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
-    private cellSize: number = 50;
     
     private rowManager: RowManager;
     private colManager: ColumnManager;
@@ -29,9 +31,6 @@ export class Grid {
     public selection:Selection;
 
     private commandManager: CommandManager;
-    
-    //Edit Input box 
-    private activeInput: HTMLInputElement | null = null;
 
     //Resizing 
     private isResizingCol: boolean = false;
@@ -39,6 +38,12 @@ export class Grid {
     private resizeIndex: number = -1;
     private oldSize: number = 0;
     private startMousePos: number = 0;
+
+    //Gridrender
+    private renderer: GridRenderer;
+
+    //EditManager
+    private editManager: EditManager;
 
     constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore, commandManager: CommandManager) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -51,6 +56,20 @@ export class Grid {
         this.dataStore = dataStore;
         this.selection = new Selection();
         this.commandManager = commandManager;
+        
+        //Init grid renderer
+        this.renderer = new GridRenderer(this.canvas, this.ctx, this.rowManager, this.colManager, this.dataStore, this.selection);
+
+        //init EditManager
+        this.editManager = new EditManager(
+            this.dataStore,
+            this.commandManager,
+            this.rowManager,
+            this.colManager,
+            this.rowHeaderWidth,
+            this.colHeaderHeight,
+            () => this.drawGrid()
+        );
 
         this.startMouseEvents();
 
@@ -67,15 +86,78 @@ export class Grid {
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
     
-        //ESC to be hide and reset Selection and commit
+        //ESC to hide and reset Selection and commit
         window.addEventListener('keydown',(e) => {
             if(e.key === 'Escape'){
                 e.preventDefault();
-                this.selection.reset();
                 this.drawGrid();
                 //Commit any edited data
-                if (this.activeInput) {
-                    this.activeInput.blur(); 
+                if (this.editManager.isEditing()) {
+                    this.editManager.blurEditor(); 
+                }
+            } 
+            if(e.key === 'ArrowDown' ){
+                 e.preventDefault();
+                const {minRow, minCol} = this.selection.getSelection();
+                console.log(`row: ${minRow}, col: ${minCol}`);
+                this.selection.setStart(minRow+1,minCol);
+                if (this.selection.isSelecting) {
+                    this.selection.finishSelecting();
+                }
+                this.drawGrid();
+                this.updateStatusBar();
+                //Commit any edited data
+                if (this.editManager.isEditing()) {
+                    this.editManager.blurEditor(); 
+                }
+            } 
+            if(e.key === 'ArrowUp'){
+                e.preventDefault();
+                const {minRow, minCol} = this.selection.getSelection();
+                console.log(`row: ${minRow}, col: ${minCol}`);
+                if (minRow>0) {
+                    this.selection.setStart(minRow-1,minCol);
+                }
+                if (this.selection.isSelecting) {
+                    this.selection.finishSelecting();
+                }
+                this.drawGrid();
+                this.updateStatusBar();
+                //Commit any edited data
+                if (this.editManager.isEditing()) {
+                    this.editManager.blurEditor(); 
+                }
+            } 
+            if(e.key === 'ArrowLeft' && !this.editManager.isEditing()){
+                e.preventDefault();
+                const {minRow, minCol} = this.selection.getSelection();
+                console.log(`row: ${minRow}, col: ${minCol}`);
+                if (minCol > 0) {
+                    this.selection.setStart(minRow,minCol-1);
+                }
+                if (this.selection.isSelecting) {
+                    this.selection.finishSelecting();
+                }
+                this.drawGrid();
+                this.updateStatusBar();
+                //Commit any edited data
+                if (this.editManager.isEditing()) {
+                    this.editManager.blurEditor(); 
+                }
+            } 
+            if(e.key === 'ArrowRight' && !this.editManager.isEditing()){
+                e.preventDefault();
+                const {minRow, minCol} = this.selection.getSelection();
+                console.log(`row: ${minRow}, col: ${minCol}`);
+                this.selection.setStart(minRow,minCol+1);
+                if (this.selection.isSelecting) {
+                    this.selection.finishSelecting();
+                }
+                this.drawGrid();
+                this.updateStatusBar();
+                //Commit any edited data
+                if (this.editManager.isEditing()) {
+                    this.editManager.blurEditor(); 
                 }
             } 
         });
@@ -93,7 +175,7 @@ export class Grid {
         
         if (row>= 0 && col>= 0) {
             //show a dynamic input box
-            this.showEditor(row,col);
+            this.editManager.showEditor(row,col,this.scrollX,this.scrollY,rect);
         }
     }
     
@@ -122,14 +204,17 @@ export class Grid {
         if(row >= 0 && col >= 0){
             this.selection.setStart(row,col);
             this.drawGrid();
+            this.updateStatusBar();
         } else if(row >= 0 && col < 0 ){
             this.selection.setStart(row,0);
             this.selection.setEnd(row,this.colManager.totalColumns);
             this.drawGrid();
+            this.updateStatusBar();
         } else if(row < 0 && col >= 0){
             this.selection.setStart(0,col);
             this.selection.setEnd(this.rowManager.totalRows,col);
             this.drawGrid();
+            this.updateStatusBar();
         }
     }
 
@@ -219,6 +304,7 @@ export class Grid {
                 if (this.selection.endRow !== row || this.selection.endCol !== col) {
                     this.selection.setEnd(row,col);
                     this.drawGrid();
+                    this.updateStatusBar();
                 }
             }
         }
@@ -305,8 +391,8 @@ export class Grid {
     }
 
     public setScroll(x: number, y: number): void {
-        if (this.activeInput) {
-            this.activeInput.blur(); 
+        if (this.editManager.isEditing()) {
+            this.editManager.blurEditor(); 
         }
 
         this.scrollX = x;
@@ -314,339 +400,29 @@ export class Grid {
         this.drawGrid();
     }
 
-    public showEditor(row: number, col: number) {
-        //getting the X,Y,Height,width to get the size for input box 
-        let x = 0;
-        for (let i = 0; i < col; i++) {
-            x += this.colManager.getWidth(i);
-        }
-
-        let y = 0;
-        for (let i = 0; i < row; i++) {
-            y += this.rowManager.getHeight(i);
-        }
-
-        const height = this.rowManager.getHeight(row);
-        const width = this.colManager.getWidth(col);
-
-        const visualX = (x - this.scrollX) + this.rowHeaderWidth;
-        const visualY = (y - this.scrollY) + this.colHeaderHeight;
-
-        //creating input element
-        const input = document.createElement('input');
-        input.style.position = 'fixed'; 
-
-        //Match styling
-        input.style.backgroundColor = "#fff";
-        input.style.color = "#000";
-        input.style.opacity = "1";
-        input.style.zIndex = "20";
-        input.style.border = '2px solid #0078d7';
-        input.style.outline = 'none';
-        input.style.font = '14px sans-serif';
-        input.style.padding = '0 4px';
-        input.style.boxSizing = 'border-box';
-
-        
-        const rect = this.canvas.getBoundingClientRect();
-        input.style.left = `${rect.left + visualX}px`;
-        input.style.top = `${rect.top + visualY}px`;
-        input.style.height = `${height}px`;
-        input.style.width = `${width}px`
-
-        //Check for existing data
-        const existingCell = this.dataStore.getCell(row, col);
-        const oldValue = existingCell ? existingCell.value.toString() : '';
-        input.value = oldValue;
-
-        document.body.appendChild(input);
-        input.focus();
-        this.activeInput = input;
-
-        //saving
-        let isCommitted = false;
-        const commit  = () => {
-            if(isCommitted) return;
-            isCommitted = true;
-
-            const newValue = input.value;
-
-            if (oldValue !== newValue) {
-                const editCommand = new EditCommand(this.dataStore,row,col,newValue,oldValue);
-                this.commandManager.executeCommand(editCommand);
-
-                //redraw updated data
-                this.dataStore.recalculateAll();
-                this.drawGrid();
-
-            }
-
-            //removing input box
-            input.remove();
-            this.activeInput = null;
-            
-            //remove suggestion
-            const existingPopup = document.getElementById('suggestion');
-            if (existingPopup) existingPopup.remove();
-        };
-
-        const showPopUp = () => {
-            const existingPopup = document.getElementById('suggestion');
-            if (existingPopup) existingPopup.remove();
-
-            if (this.isFormula) {
-                console.log('isFormula is true');
-                
-                const suggestion = document.createElement('div');
-                suggestion.id = 'suggestion';
-                
-                //styling to place below input box
-                suggestion.style.position = 'fixed';
-                suggestion.style.left = input.style.left;
-                suggestion.style.top = `calc(${input.style.top} + ${input.style.height})`;
-                suggestion.style.width = input.style.width;
-                suggestion.style.zIndex = "21"; 
-                suggestion.style.backgroundColor = "#fff";
-                suggestion.style.border = "1px solid #ccc";
-
-                const ul = document.createElement('ul');
-                ul.style.listStyle = 'none';
-                ul.style.margin = '0';
-                ul.style.padding = '4px 0';
-                
-                //COUNT, MIN, MAX, SUM
-                const formulas = ["COUNT(A1:B3)","MIN(A1:B3)","MAX(A1:B3)","SUM(A1:B3)"];
-
-                //add in popup
-                for (let i = 0; i < formulas.length; i++) {
-                    const li = document.createElement('li');
-                    li.id = `${formulas[i]}`;
-                    li.innerText = `${formulas[i]}`;
-                    li.style.padding = '4px 8px';
-                    li.style.cursor = 'pointer';
-                    li.onmousedown = (e) => {
-                        e.preventDefault();
-                        input.value = `=${li.innerText}`;
-                        const existingPopup = document.getElementById('suggestion');
-                        if (existingPopup) existingPopup.remove();
-                    };
-                    ul.appendChild(li);
-                }
-            
-                suggestion.appendChild(ul);
-                document.body.appendChild(suggestion);
-            }
-        }; 
-        
-
-        //commit func trigger
-        input.addEventListener('blur',commit);
-        input.addEventListener('keydown', (e) => {
-            if(e.key === 'Enter') commit();
-        });
-        input.addEventListener('input', (e) => {
-            this.handleFormulaInput(input.value);
-            showPopUp();
-        });
-    }
-
-    private isFormula:boolean = false;
-    private handleFormulaInput(input: string) {
-        if (input.startsWith('=')) {
-            this.isFormula = true;
-        } else {
-            this.isFormula = false;
-        }
-    }
-
-    
     public drawGrid(): void {
-        //clearing the canvas for scrolling redraw
-        this.ctx.clearRect(0,0,this.canvas.width, this.canvas.height);
-
-        //First Draw lines, then fill data, then header bg and header text
-
-        this.ctx.beginPath();
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeStyle = '#e0e0e0';
-
-        //Skip cols and rows that are not visible
-        //skip columns
-        let currentX = 0;
-        let colIndex = 0;
-
-        while (currentX + this.colManager.getWidth(colIndex) < this.scrollX) {
-            currentX += this.colManager.getWidth(colIndex);
-            colIndex++;
-        }
-
-        //skip rows
-        let currentY = 0;
-        let rowIndex = 0;
-
-        while (currentY + this.rowManager.getHeight(rowIndex) < this.scrollY) {
-            currentY += this.rowManager.getHeight(rowIndex);
-            rowIndex++;
-        }
-
-        //console.log(`Skipped to row ${rowIndex} and col ${colIndex}`)
-
-        //Start with colIndex that will be visible
-        //vertical lines
-        //stop if currentX moves out of canvas width or exceeds total columns
-        let tempX = currentX;
-        let tempColIndex = colIndex;
-    
-        while (tempX - this.scrollX <= this.canvas.width && tempColIndex < this.colManager.totalColumns) {
-            let colX = (tempX - this.scrollX) + this.rowHeaderWidth; 
-            this.ctx.moveTo(colX, this.colHeaderHeight);
-            this.ctx.lineTo(colX, this.canvas.height);
-            
-            tempX += this.colManager.getWidth(tempColIndex);
-            tempColIndex++;
-        }
-
-
-        //horizontal lines
-        let tempY = currentY;
-        let tempRowIndex = rowIndex;
-        while(tempY - this.scrollY <= this.canvas.height && tempRowIndex < this.rowManager.totalRows){
-            let rowY = tempY - this.scrollY + this.colHeaderHeight;
-            this.ctx.moveTo(this.rowHeaderWidth, rowY)
-            this.ctx.lineTo(this.canvas.width, rowY);
-            
-            tempY += this.rowManager.getHeight(tempRowIndex);
-            tempRowIndex++;
-        }
-        this.ctx.stroke();
-
-        //Filling data in cells
-        this.ctx.fillStyle = '#000000';
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.font = '14px sans-serif';
-
-        //Filling Row Wise
-        let tempDataY = currentY;
-        let tempDataRowIdx = rowIndex;
-        while (tempDataY - this.scrollY <= this.canvas.height && tempDataRowIdx < this.rowManager.totalRows) {
-            let rowHeight = this.rowManager.getHeight(tempDataRowIdx);
-            let rowY = (tempDataY - this.scrollY) + this.colHeaderHeight;
-            
-            let tempDataX = currentX;
-            let tempDataColIdx = colIndex;
-            while (tempDataX - this.scrollX <= this.canvas.width && tempDataColIdx < this.colManager.totalColumns) {
-                let colWidth = this.colManager.getWidth(tempDataColIdx);
-                let colX = (tempDataX - this.scrollX) + this.rowHeaderWidth;
-
-                const cell = this.dataStore.getCell(tempDataRowIdx,tempDataColIdx);
-
-                if (cell) {
-                    //textCliping
-                    this.ctx.save(); 
-                    this.ctx.beginPath();
-                    this.ctx.rect(colX, rowY, colWidth, rowHeight); 
-                    this.ctx.clip();
-                    
-                    this.ctx.fillText(cell.displayValue.toString(), colX+5, rowY+(rowHeight/2));
-                    
-                    this.ctx.restore();
-                }
-
-                tempDataX += colWidth;
-                tempDataColIdx++;
-            }
-
-            tempDataY += rowHeight;
-            tempDataRowIdx++;
-        }
-
-        if (this.selection.isActive()) {
-            const bounds = this.selection.getSelection();
-            
-            let selX = 0;
-            for (let i = 0; i < bounds.minCol; i++) selX += this.colManager.getWidth(i);
-            
-            let selY = 0;
-            for (let i = 0; i < bounds.minRow; i++) selY += this.rowManager.getHeight(i);
-
-            let selW = 0;
-            for (let i = bounds.minCol; i <= bounds.maxCol; i++) selW += this.colManager.getWidth(i);
-            
-            let selH = 0;
-            for (let i = bounds.minRow; i <= bounds.maxRow; i++) selH += this.rowManager.getHeight(i);
-
-            const visualSelX = (selX - this.scrollX) + this.rowHeaderWidth;
-            const visualSelY = (selY - this.scrollY) + this.colHeaderHeight;
-
-            //Translucent blue rectangle
-            //15% opacity blue
-            this.ctx.fillStyle = 'rgba(0, 118, 215, 0.15)'; 
-            this.ctx.fillRect(visualSelX, visualSelY, selW, selH);
-
-            //Solid border line
-            this.ctx.strokeStyle = '#0078d7'; 
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(visualSelX, visualSelY, selW, selH);
-        }
-
-        //Create header Background 
-        this.ctx.strokeStyle = '#e0e0e0';
-        this.ctx.fillStyle = '#f8f9fa';
-        this.ctx.fillRect(0,0,this.canvas.width, this.colHeaderHeight);
-        this.ctx.fillRect(0,0,this.rowHeaderWidth, this.canvas.height);
-
-        //header txt
-        this.ctx.fillStyle = "#333333";
-        this.ctx.textAlign = "center";
-        this.ctx.textBaseline = "middle";
-        this.ctx.font = '14px sans-serif'
-
-        //Col headers Names filling
-        let tempHeaderX = currentX;
-        let tempColHeaderIndex = colIndex;
-    
-        while (tempHeaderX - this.scrollX <= this.canvas.width && tempColHeaderIndex < this.colManager.totalColumns) {
-            let width = this.colManager.getWidth(tempColHeaderIndex);
-            let colX = (tempHeaderX - this.scrollX) + this.rowHeaderWidth; 
-            
-            this.ctx.fillText(this.generateColNames(tempColHeaderIndex),colX+(width/2),this.colHeaderHeight/2);
-            this.ctx.strokeRect(colX,0,width,this.colHeaderHeight);
-            
-            tempHeaderX += width;
-            tempColHeaderIndex++;
-        }
-
-
-        //row headers Names filling
-        let tempHeaderY = currentY;
-        let tempRowHeaderIndex = rowIndex;
-        while(tempHeaderY - this.scrollY <= this.canvas.height && tempRowHeaderIndex < this.rowManager.totalRows){
-            let height = this.rowManager.getHeight(tempRowHeaderIndex);
-            let rowY = tempHeaderY - this.scrollY + this.colHeaderHeight;
-            
-            this.ctx.fillText(`${tempRowHeaderIndex + 1}`,this.rowHeaderWidth/2,rowY+(height/2))
-            this.ctx.strokeRect(0,rowY,this.rowHeaderWidth,height);
-            
-            tempHeaderY += height;
-            tempRowHeaderIndex++;
-        }
-
-        //Dark top left corner
-        this.ctx.fillStyle = '#e8eaed';
-        this.ctx.fillRect(0,0,this.rowHeaderWidth,this.colHeaderHeight);
-
+        this.renderer.drawGrid(this.scrollX,this.scrollY);
     }
 
-    private generateColNames(colNumber: number): string {
-        let colName = '';
-        let n = colNumber + 1; 
+    private updateStatusBar(): void {
+        const statusBar = document.getElementById('summary-bar');
+        if(!statusbar) return;
 
-        while (n > 0) {
-            colName = String.fromCharCode(65 + ((n - 1) % 26)) + colName;
-            n = Math.floor((n - ((n - 1) % 26)) / 26);
+        if (!this.selection.isActive()) {
+            statusBar!.innerText = '';
+            return;
         }
-        // console.log(`Col: ${colNumber} Name: ${colName}`);
-        return colName;
+
+        const bounds = this.selection.getSelection();
+
+        const result = SummaryCalculator.calculate(
+            this.dataStore,
+            bounds.minRow,
+            bounds.maxRow,
+            bounds.minCol,
+            bounds.maxCol
+        );
+
+        statusBar!.innerText = result
     }
 }

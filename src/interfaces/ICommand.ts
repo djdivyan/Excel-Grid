@@ -1,4 +1,4 @@
-export interface Command{
+export interface ICommand{
     execute(): void;
     undo(): void;
 }
