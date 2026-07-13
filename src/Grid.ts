@@ -8,6 +8,7 @@ import { GridRenderer } from "./GridRenderer.js";
 import { RowManager } from "./RowManager.js";
 import { Selection } from "./Selection.js";
 import { SummaryCalculator } from "./SummaryCalculator.js";
+import { ViewportManager } from "./ViewPortManager.js";
 
 export class Grid {
     private canvas: HTMLCanvasElement;
@@ -45,6 +46,9 @@ export class Grid {
     //EditManager
     private editManager: EditManager;
 
+    //ViewPortManager
+    private viewportManager: ViewportManager;
+
     constructor(canvasId: string, totalRows: number, totalColumns: number, dataStore: DataStore, commandManager: CommandManager) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -69,6 +73,14 @@ export class Grid {
             this.rowHeaderWidth,
             this.colHeaderHeight,
             () => this.drawGrid()
+        );
+
+        //init viewportmanager
+        this.viewportManager = new ViewportManager(
+            this.rowManager, 
+            this.colManager, 
+            this.rowHeaderWidth, 
+            this.colHeaderHeight
         );
 
         this.startMouseEvents();
@@ -137,7 +149,7 @@ export class Grid {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        const {row, col} = this.convertToCell(mouseX,mouseY);
+        const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);
         
         if (row>= 0 && col>= 0) {
             //show a dynamic input box
@@ -164,8 +176,8 @@ export class Grid {
             return;
         }
 
-        const {row,col} = this.convertToCell(mouseX,mouseY);
-        console.log(`Mouse Down Triggered on CELL ${row},${col}`);
+        const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);
+        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
 
         if(row >= 0 && col >= 0){
             this.selection.setStart(row,col);
@@ -207,64 +219,44 @@ export class Grid {
             //newHeight considering min and max
             let newHeight = Math.min(300,Math.max(20,this.oldSize + diff));
             
-
+            //Calling viewport for hoverboundry calc
             this.rowManager.setHeight(this.resizeIndex, newHeight);
             this.updateSpacer();
             this.drawGrid();
             return;
         }
 
-        //hover detect
-        this.canvas.style.cursor = 'default';
-        this.resizeIndex = -1;
+        const boundary = this.viewportManager.getHoveredResizeBoundary(
+            mouseX, 
+            mouseY, 
+            this.scrollX, 
+            this.scrollY, 
+            this.canvas.width, 
+            this.canvas.height
+        );
 
-        //col header hover
-        if(mouseX > this.rowHeaderWidth && mouseY < this.colHeaderHeight){
-            let currentX = 0;
-            let colIndex = 0;
-            
-            while (currentX - this.scrollX <= this.canvas.width && colIndex < this.colManager.totalColumns) {
-                //visible onscreen
-                if (currentX + this.colManager.getWidth(colIndex) >= this.scrollX) {
-                    let rightEdge = (currentX - this.scrollX) + this.rowHeaderWidth + this.colManager.getWidth(colIndex);
-                    if (Math.abs(mouseX - rightEdge) < 4) {
-                        this.canvas.style.cursor = 'col-resize'; 
-                        this.resizeIndex = colIndex;             
-                        this.oldSize = this.colManager.getWidth(colIndex); 
-                        break;
-                    } else {
-                        this.canvas.style.cursor = 'pointer';
-                    }
-                } 
-                currentX += this.colManager.getWidth(colIndex);
-                colIndex++;
+        if (boundary.type === 'col') {
+            this.canvas.style.cursor = 'col-resize'; 
+            this.resizeIndex = boundary.index;             
+            this.oldSize = boundary.oldSize; 
+        } else if (boundary.type === 'row') {
+            this.canvas.style.cursor = 'row-resize';
+            this.resizeIndex = boundary.index;
+            this.oldSize = boundary.oldSize;
+        } else {
+            //Normal header will have pointer
+            if ((mouseX > this.rowHeaderWidth && mouseY < this.colHeaderHeight) || 
+                (mouseX < this.rowHeaderWidth && mouseY > this.colHeaderHeight)) {
+                this.canvas.style.cursor = 'pointer';
+            } else {
+                this.canvas.style.cursor = 'default';
             }
+            this.resizeIndex = -1;
         }
 
-        //row header hover
-        if (mouseX < this.rowHeaderWidth && mouseY > this.colHeaderHeight) {
-            let currentY = 0;
-            let rowIndex = 0;
-            while (currentY - this.scrollY <= this.canvas.height && rowIndex < this.rowManager.totalRows) {
-                if (currentY + this.rowManager.getHeight(rowIndex) >= this.scrollY) {
-                    let bottomEdge = (currentY - this.scrollY) + this.colHeaderHeight + this.rowManager.getHeight(rowIndex);
-                    if (Math.abs(mouseY - bottomEdge) < 4) {
-                        this.canvas.style.cursor = 'row-resize';
-                        this.resizeIndex = rowIndex;
-                        this.oldSize = this.rowManager.getHeight(rowIndex);
-                        break;
-                    } else {
-                        this.canvas.style.cursor = 'pointer';
-                    }
-                }
-                currentY += this.rowManager.getHeight(rowIndex);
-                rowIndex++;
-            }
-        }
-
+        
         if (this.selection.isSelecting && !this.isResizingCol && !this.isResizingRow) {
-            const {row,col} = this.convertToCell(mouseX,mouseY);
-            //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
+            const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);            //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
             if(row >= 0 && col >= 0){
                 //if new cell
                 if (this.selection.endRow !== row || this.selection.endCol !== col) {
@@ -303,43 +295,6 @@ export class Grid {
         if (this.selection.isSelecting) {
             this.selection.finishSelecting();
         }
-    }
-
-
-    //converting mouse x,y to row,col 
-    private convertToCell(x: number, y:number): {row: number, col:number}{
-        //find column
-        let currentX = 0;
-        let colIdx = 0;
-        //new X considering scroll and headers
-        let newX = x - this.rowHeaderWidth + this.scrollX;
-
-        //Clicked on header
-        if (x < this.rowHeaderWidth) colIdx = -1;
-        else {
-            while (currentX <= newX && colIdx < this.colManager.totalColumns) {
-                currentX += this.colManager.getWidth(colIdx);
-                if (currentX> newX) break;
-                colIdx++;
-            }
-        }
-
-        //find row
-        let currentY = 0;
-        let rowIdx = 0;
-        //new Y considering scroll and headers
-        let newY = y - this.colHeaderHeight + this.scrollY;
-
-        //Clicked on header
-        if (y < this.colHeaderHeight) rowIdx = -1;
-        else {
-            while (currentY <= newY && rowIdx < this.rowManager.totalRows) {
-                currentY += this.rowManager.getHeight(rowIdx);
-                if (currentY > newY) break;
-                rowIdx++;
-            }
-        }
-        return {row:rowIdx, col:colIdx}
     }
 
     private updateSpacer(): void {
@@ -394,34 +349,13 @@ export class Grid {
 
 
     private ensureCellIsVisible(row: number, col:number): void{
-        //getting the X,Y,Height,widt
-        let x = 0;
-        for (let i = 0; i < col; i++){
-            x += this.colManager.getWidth(i);
-        } 
-
-        let y = 0;
-        for (let i = 0; i < row; i++) {
-            y += this.rowManager.getHeight(i);
-        }
-
-        const height = this.rowManager.getHeight(row);
-        const width = this.colManager.getWidth(col);
-
-        const visibleWidth = this.canvas.width - this.rowHeaderWidth;
-        const visibleHeight = this.canvas.height - this.colHeaderHeight;
-
-        if (x < this.scrollX) {
-            this.scrollX = x;
-        }else if (x + width > this.scrollX + visibleWidth){
-            this.scrollX = x + width - visibleWidth + 17;
-        }
-
-        if (y < this.scrollY) {
-            this.scrollY = y;
-        }else if (y + height > this.scrollY + visibleHeight - 45){
-            this.scrollY = y + height - visibleHeight + 45;
-        }
+        //call viewport to calc scroll
+        const { newScrollX, newScrollY } = this.viewportManager.calcScrollToMakeCellVisible(
+            row, col, this.scrollX, this.scrollY, this.canvas.width, this.canvas.height
+        );
+        
+        this.scrollX = newScrollX;
+        this.scrollY = newScrollY;
 
         const container = document.getElementById('grid-container') as HTMLDivElement;
         container.scrollLeft = this.scrollX;
