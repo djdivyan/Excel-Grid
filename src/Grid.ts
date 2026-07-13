@@ -8,7 +8,7 @@ import { GridRenderer } from "./GridRenderer.js";
 import { RowManager } from "./RowManager.js";
 import { Selection } from "./Selection.js";
 import { SummaryCalculator } from "./SummaryCalculator.js";
-import { ViewportManager } from "./ViewPortManager.js";
+import { ViewportManager } from "./ViewportManager.js";
 
 export class Grid {
     private canvas: HTMLCanvasElement;
@@ -327,7 +327,7 @@ export class Grid {
 
     private updateStatusBar(): void {
         const statusBar = document.getElementById('summary-bar');
-        if(!statusbar) return;
+        if(!statusBar) return;
 
         if (!this.selection.isActive()) {
             statusBar!.innerText = '';

@@ -2,6 +2,7 @@ import { ColumnManager } from './ColumnManager.js';
 import { CommandManager } from './Command/CommandManager.js';
 import { DataStore } from './DataStore.js';
 import { Grid } from './Grid.js'; 
+import { JsonDataLoader } from './JsonDataLoader.js';
 import { RowManager } from './RowManager.js';
 
 window.onload = async () => {
@@ -11,7 +12,7 @@ window.onload = async () => {
     const totalColumns  = 500;
 
     const dataStore = new DataStore();
-    await dataStore.loadJsonData('data.json');
+    await JsonDataLoader.load('data.json', dataStore);
 
     const commandManager = new CommandManager();
 
