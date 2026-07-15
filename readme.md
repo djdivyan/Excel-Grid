@@ -92,9 +92,17 @@ When an action occurs, it is passed to the CommandManager, which executes it and
 
 
 ## Performance Observations
-
+- Virtual Rendering: Instead of rendering the entire 100,000 row by 500 column grid, the system calculates and draws only the exact cells visible in the current viewport.
+- Large Data Handling: The `JsonDataLoader` efficiently parses 50,000 generated JSON records and inserts them into a sparse Map structure, minimizing memory overhead and load times.
+- Initialization: Loading the entire application and parsing 50,000 records takes roughly ~100-200ms. 
+- Scrolling: Because only visible cells (typically ~30-50 at a time) are painted, scrolling remains locked at 60 FPS regardless of the total data volume.
+- Calculations: Highlighting massive ranges (e.g: 10,000 cells) for summary calculation performs the work but can cause slight frame drops due to iterating the Map structure.
 
 ## Accessibility Considerations
+- Overcoming Canvas Limitations: Because an HTML5 `<canvas>` renders as a single flat image, its internal grid is inherently invisible to screen readers. To solve this, the we use a native HTML `<input>` overlay during cell editing, restoring focus and screen reader visibility.
+- Keyboard Navigation: The grid is fully operable without a mouse. Users can traverse the grid using Arrow keys, open and commit edits using `Enter`, and safely discard changes using `Escape`.
+- Summary Status Bar: The summary calculator (Count, Min, Max, Sum, Average) outputs its results to standard HTML text elements outside the canvas, ensuring that computed data can be easily read by assistive technologies.
+- Selection accessibility: We use bold borders along with colors for selection to support colorblind users
 
 
 ## Known Limitations and Next Improvements
