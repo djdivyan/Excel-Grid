@@ -91,7 +91,10 @@ export class EditManager {
         this.activeInput!.addEventListener('blur', () => this.commit(row,col,oldValue));
         
         this.activeInput!.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.commit(row,col,oldValue);
+            if (e.key === 'Enter'){
+                e.stopPropagation();
+                this.commit(row,col,oldValue);
+            } 
             if (e.key === 'Escape') {
                 //Prevent data from being committed
                 this.isCommitted = true; 
@@ -116,7 +119,6 @@ export class EditManager {
 
             }
         });
-
     
     }
 

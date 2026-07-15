@@ -1,11 +1,10 @@
-import { ColumnManager } from './ColumnManager.js';
 import { CommandManager } from './Command/CommandManager.js';
 import { DataStore } from './DataStore.js';
 import { Grid } from './Grid.js'; 
 import { JsonDataLoader } from './JsonDataLoader.js';
-import { RowManager } from './RowManager.js';
 
 window.onload = async () => {
+    performance.mark('app-start');
     console.log("App initialized!");
     //1 Lakh rows and 500 cols 
     const totalRows = 100000;
@@ -37,4 +36,9 @@ window.onload = async () => {
             }
         }
     });
+    performance.mark('app-end');
+    performance.measure('App Load Time', 'app-start', 'app-end');
+    console.log(`App took ${performance.getEntriesByName('App Load Time')[0]!.duration.toFixed(2)}ms to load.`);
+    performance.clearMarks();
+    performance.clearMeasures();
 };

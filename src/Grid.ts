@@ -94,9 +94,9 @@ export class Grid {
     }
     //down,move and up
     private startMouseEvents() {
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('mouseup', () => this.handleMouseUp());
+        this.canvas.addEventListener('pointerdown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('pointermove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('pointerup', () => this.handleMouseUp());
     
         //ESC to hide and reset Selection and commit
         window.addEventListener('keydown',(e) => {
@@ -118,7 +118,6 @@ export class Grid {
             if(e.key === 'ArrowUp'){
                 e.preventDefault();
                 const {minRow, minCol} = this.selection.getSelection();
-                console.log(`row: ${minRow}, col: ${minCol}`);
                 if (minRow>0) {
                     this.moveSelection(minRow-1,minCol);
                 }
@@ -126,7 +125,6 @@ export class Grid {
             if(e.key === 'ArrowLeft' && !this.editManager.isEditing()){
                 e.preventDefault();
                 const {minRow, minCol} = this.selection.getSelection();
-                console.log(`row: ${minRow}, col: ${minCol}`);
                 if (minCol > 0) {
                     this.moveSelection(minRow, minCol - 1);
                 }
@@ -138,9 +136,19 @@ export class Grid {
                     this.moveSelection(minRow, minCol + 1);
                 }
             } 
+            //Enter to edit
+            if (e.key === 'Enter' && !this.editManager.isEditing()) {
+                e.preventDefault();
+                console.log(`Enter to edit ${this.editManager.isEditing()}`);
+                const {minRow, minCol} = this.selection.getSelection();
+                if (minRow>= 0 && minCol>= 0) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.editManager.showEditor(minRow,minCol,this.scrollX,this.scrollY,rect);
+                }
+            }
         });
         //double click listener for edit cell
-        this.canvas.addEventListener('dblclick',(e) => this.handleDoubleClick(e))
+        this.canvas.addEventListener('dblclick',(e) => this.handleDoubleClick(e));
     }
 
     //For Edit cell
