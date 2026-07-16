@@ -11,6 +11,9 @@ export class EditManager {
     private isFormula: boolean  = false;
     private isCommitted: boolean = false; 
 
+    private currentSuggestions: string[] = [];
+    private suggestionIndex: number = -1;
+
     constructor(
         private dataStore: DataStore,
         private commandManager: CommandManager,
@@ -91,10 +94,35 @@ export class EditManager {
         this.activeInput!.addEventListener('blur', () => this.commit(row,col,oldValue));
         
         this.activeInput!.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter'){
+            const hasPopup = document.getElementById('suggestion') !== null;
+
+            if (e.key === 'ArrowDown' && hasPopup) {
+                e.preventDefault(); 
                 e.stopPropagation();
-                this.commit(row,col,oldValue);
+                if (this.suggestionIndex < this.currentSuggestions.length - 1) {
+                    this.suggestionIndex++;
+                    this.updateSuggestionHighlight();
+                }
             } 
+            else if (e.key === 'ArrowUp' && hasPopup) {
+                e.preventDefault(); 
+                e.stopPropagation();
+                if (this.suggestionIndex > 0) {
+                    this.suggestionIndex--;
+                    this.updateSuggestionHighlight();
+                }
+            } 
+            else if (e.key === 'Enter') {
+                if (hasPopup && this.suggestionIndex >= 0) {
+                    e.preventDefault();
+                    this.activeInput!.value = `=${this.currentSuggestions[this.suggestionIndex]}`;
+                    this.removeSuggestionPopup();
+                } else {
+                    e.stopPropagation();
+                    this.commit(row, col, oldValue);
+                }
+            }
+
             if (e.key === 'Escape') {
                 //Prevent data from being committed
                 this.isCommitted = true; 
@@ -150,6 +178,16 @@ export class EditManager {
         this.removeSuggestionPopup();
 
         if(!this.isFormula) return;
+        
+        const val = ["COUNT(A1:B3)", "MIN(A1:B3)", "MAX(A1:B3)", "SUM(A1:B3)"];
+        let formulas = val.filter(v => v.includes(input.value.slice(1).toUpperCase()));
+        
+        if (formulas.length <= 0) {
+            formulas = val;
+        }
+        //Saving formulas in class state for navigation
+        this.currentSuggestions = formulas;
+        this.suggestionIndex = -1;
 
         const suggestion = document.createElement('div');
         suggestion.id = 'suggestion';
@@ -160,31 +198,40 @@ export class EditManager {
         suggestion.style.zIndex = "21"; 
         suggestion.style.backgroundColor = GridConfig.colors.editorBackground;
         suggestion.style.border = "1px solid #cccccc";
+        suggestion.style.borderRadius = "6px";
+        suggestion.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)";
+        suggestion.style.padding = "4px";
 
         const ul = document.createElement('ul');
         ul.style.listStyle = 'none';
         ul.style.margin = '0';
         ul.style.padding = '4px 0';
 
-        const val = ["COUNT(A1:B3)", "MIN(A1:B3)", "MAX(A1:B3)", "SUM(A1:B3)"];
-        let formulas = val.filter(v => v.includes(input.value.slice(1).toUpperCase()));
-        
-        if (formulas.length <= 0) {
-            formulas = val;
-        }
 
-        for (const formula of formulas) {
+                for (let i = 0; i < formulas.length; i++) {
+            const formula = formulas[i]!;
             const li = document.createElement('li');
-            li.id = formula;
+            li.id = `suggestion-item-${i}`;
             li.innerText = formula;
-            li.style.padding = '4px 8px';
+            li.style.padding = '6px 10px';
             li.style.cursor = 'pointer';
+            li.style.borderRadius = '4px';
+            li.style.fontFamily = 'sans-serif';
+            li.style.fontSize = '13px';
             
+            //Mouse hover handling
+            li.onmouseenter = () => {
+                this.suggestionIndex = i;
+                this.updateSuggestionHighlight();
+            };
+            
+            //Mouse click handling
             li.onmousedown = (e) => {
                 e.preventDefault(); 
-                input.value = `=${li.innerText}`;
+                input.value = `=${formula}`;
                 this.removeSuggestionPopup();
             };
+            
             ul.appendChild(li);
         }
     
@@ -195,5 +242,25 @@ export class EditManager {
     private removeSuggestionPopup(): void {
         const existingPopup = document.getElementById('suggestion');
         if (existingPopup) existingPopup.remove();
+
+        this.currentSuggestions = [];
+        this.suggestionIndex = -1;
+    }
+
+    private updateSuggestionHighlight(): void {
+        for (let i = 0; i < this.currentSuggestions.length; i++) {
+            const li = document.getElementById(`suggestion-item-${i}`);
+            if (li) {
+                if (i === this.suggestionIndex) {
+                    //Highlight selected item
+                    li.style.backgroundColor = '#e8f0fe'; 
+                    li.style.color = '#1a73e8';
+                } else {
+                    //Reset unselected items
+                    li.style.backgroundColor = 'transparent';
+                    li.style.color = '#000';
+                }
+            }
+        }
     }
 }
