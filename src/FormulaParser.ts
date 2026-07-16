@@ -1,4 +1,5 @@
 import type { DataStore } from "./DataStore.js";
+import { FormulaFactory } from "./Formulas/FormulaFactory.js";
 
 export class FormulaParser {
     private static colNameToIndex(letters: string): number {
@@ -43,19 +44,14 @@ export class FormulaParser {
         }
 
         console.log(values);
-        //TODO - Use factory delegate to get object of function then exec
-        //execute the requested function
-        switch(func!.toUpperCase()) {
-            case 'SUM': 
-                return values.reduce((a, b) => a + b, 0);
-            case 'COUNT': 
-                return values.length;
-            case 'MAX': 
-                return values.length ? Math.max(...values) : 0;
-            case 'MIN': 
-                return values.length ? Math.min(...values) : 0;
-            default: 
-                return "#NotRecognised?";
+        // Using factory delegate to get object of function of particular formula then execute
+        const mathFunction = FormulaFactory.getFunction(func!);
+        
+        if (mathFunction) {
+            //execute the requested function
+            return mathFunction.execute(values);
+        } else {
+            return "#NotRecognised?";
         }
     }
 }
