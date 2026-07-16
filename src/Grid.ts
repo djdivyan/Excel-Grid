@@ -2,6 +2,8 @@ import { ColumnManager } from "./ColumnManager.js";
 import type { CommandManager } from "./Command/CommandManager.js";
 import { EditCommand } from "./Command/EditCommand.js";
 import { ColumnResizeCommand, RowResizeCommand } from "./Command/ResizeCommands.js";
+import { KeyboardController } from "./Controller/KeyboardController.js";
+import { PointerController } from "./Controller/PointerController.js";
 import type { DataStore } from "./DataStore.js";
 import { EditManager } from "./EditManager.js";
 import { GridRenderer } from "./GridRenderer.js";
@@ -32,13 +34,10 @@ export class Grid {
     public selection:Selection;
 
     private commandManager: CommandManager;
-
-    //Resizing 
-    private isResizingCol: boolean = false;
-    private isResizingRow: boolean = false;
-    private resizeIndex: number = -1;
-    private oldSize: number = 0;
-    private startMousePos: number = 0;
+    
+    // Controllers for events
+    private pointerController: PointerController;
+    private keyboardController: KeyboardController;
 
     //Gridrender
     private renderer: GridRenderer;
@@ -83,7 +82,22 @@ export class Grid {
             this.colHeaderHeight
         );
 
-        this.startMouseEvents();
+        //Input Controller
+        this.pointerController = new PointerController(
+            this.canvas, this.rowManager, this.colManager, this.viewportManager, 
+            this.selection, this.editManager, this.commandManager, 
+            this.rowHeaderWidth, this.colHeaderHeight,
+            () => ({ x: this.scrollX, y: this.scrollY }), // getScroll
+            () => this.drawGrid(),                        // onRedrawRequired
+            () => { this.updateStatusBar(); this.updateSpacer(); } // onUIUpdateRequired
+        );
+
+        this.keyboardController = new KeyboardController(
+            this.canvas, this.selection, this.editManager, this.rowManager, this.colManager,
+            () => ({ x: this.scrollX, y: this.scrollY }), // getScroll
+            (row, col) => this.moveSelection(row, col),   // moveSelection
+            () => this.drawGrid()                         // onRedrawRequired
+        );
 
         //handle window resize to adjust canvas size
         this.resizeCanvas();
@@ -91,228 +105,6 @@ export class Grid {
         window.addEventListener('resize', () => this.resizeCanvas());
         
         this.drawGrid();
-    }
-    //down,move and up
-    private startMouseEvents() {
-        this.canvas.addEventListener('pointerdown', (e) => this.handleMouseDown(e));
-        this.canvas.addEventListener('pointermove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('pointerup', () => this.handleMouseUp());
-    
-        //ESC to hide and reset Selection and commit
-        window.addEventListener('keydown',(e) => {
-            if(e.key === 'Escape'){
-                e.preventDefault();
-                this.drawGrid();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
-                }
-            } 
-            if(e.key === 'ArrowDown' ){
-                 e.preventDefault();
-                const {minRow, minCol} = this.selection.getSelection();
-                if(minRow < this.rowManager.totalRows - 1){
-                    this.moveSelection(minRow+1,minCol);
-                }
-            } 
-            if(e.key === 'ArrowUp'){
-                e.preventDefault();
-                const {minRow, minCol} = this.selection.getSelection();
-                if (minRow>0) {
-                    this.moveSelection(minRow-1,minCol);
-                }
-            } 
-            if(e.key === 'ArrowLeft' && !this.editManager.isEditing()){
-                e.preventDefault();
-                const {minRow, minCol} = this.selection.getSelection();
-                if (minCol > 0) {
-                    this.moveSelection(minRow, minCol - 1);
-                }
-            } 
-            if(e.key === 'ArrowRight' && !this.editManager.isEditing()){
-                e.preventDefault();
-                const {minRow, minCol} = this.selection.getSelection();
-                if(minRow < this.colManager.totalColumns - 1){
-                    this.moveSelection(minRow, minCol + 1);
-                }
-            } 
-            //Enter to edit
-            if (e.key === 'Enter' && !this.editManager.isEditing()) {
-                e.preventDefault();
-                console.log(`Enter to edit ${this.editManager.isEditing()}`);
-                const {minRow, minCol} = this.selection.getSelection();
-                if (minRow>= 0 && minCol>= 0) {
-                    const rect = this.canvas.getBoundingClientRect();
-                    this.editManager.showEditor(minRow,minCol,this.scrollX,this.scrollY,rect);
-                }
-            }
-        });
-        //double click listener for edit cell
-        this.canvas.addEventListener('dblclick',(e) => this.handleDoubleClick(e));
-    }
-
-    //For Edit cell
-    public handleDoubleClick(e: MouseEvent): any {
-        const rect = this.canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);
-        
-        if (row>= 0 && col>= 0) {
-            //show a dynamic input box
-            this.editManager.showEditor(row,col,this.scrollX,this.scrollY,rect);
-        }
-    }
-    
-    private handleMouseDown(e: PointerEvent): void {
-        let rect = this.canvas.getBoundingClientRect();
-        //X and Y positions on canvas
-        let mouseX = e.clientX - rect.left;
-        let mouseY = e.clientY - rect.top;
-
-        //Check if its on header
-        if(mouseY < this.colHeaderHeight && this.canvas.style.cursor === 'col-resize'){
-            this.isResizingCol = true;
-            this.startMousePos = mouseX;
-            return;
-        }
-
-        if(mouseX < this.rowHeaderWidth && this.canvas.style.cursor === 'row-resize'){
-            this.isResizingRow = true;
-            this.startMousePos = mouseY;
-            return;
-        }
-
-        const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);
-        // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
-
-        if(row >= 0 && col >= 0){
-            //Select then edit for mobile users
-            const currentBounds = this.selection.getSelection();
-            
-            //Check if the exact same single cell is already selected
-            if (e.pointerType === 'touch' && currentBounds.minRow === row && currentBounds.maxRow === row && currentBounds.minCol === col && currentBounds.maxCol === col) {
-                //User tapped the already active cell so open editer
-                this.handleDoubleClick(e);
-                return; 
-            }
-
-            this.selection.setStart(row,col);
-            this.drawGrid();
-            this.updateStatusBar();
-        } else if(row >= 0 && col < 0 ){
-            this.selection.setStart(row,0);
-            this.selection.setEnd(row,this.colManager.totalColumns);
-            this.drawGrid();
-            this.updateStatusBar();
-        } else if(row < 0 && col >= 0){
-            this.selection.setStart(0,col);
-            this.selection.setEnd(this.rowManager.totalRows,col);
-            this.drawGrid();
-            this.updateStatusBar();
-        }
-    }
-
-    private handleMouseMove(e:MouseEvent): void {
-
-        let rect = this.canvas.getBoundingClientRect();
-        //X and Y positions on canvas
-        let mouseX = e.clientX - rect.left;
-        let mouseY = e.clientY - rect.top;
-
-        //Col resize
-        if (this.isResizingCol) {
-            const diff = mouseX - this.startMousePos;
-            const newWidth = Math.min(400,Math.max(50,this.oldSize + diff));
-            
-            this.colManager.setWidth(this.resizeIndex, newWidth);
-            this.updateSpacer();
-            this.drawGrid();
-            return;
-        }
-        //Row resize
-        if (this.isResizingRow) {
-            const diff = mouseY - this.startMousePos;
-            //newHeight considering min and max
-            let newHeight = Math.min(300,Math.max(20,this.oldSize + diff));
-            
-            //Calling viewport for hoverboundry calc
-            this.rowManager.setHeight(this.resizeIndex, newHeight);
-            this.updateSpacer();
-            this.drawGrid();
-            return;
-        }
-
-        const boundary = this.viewportManager.getHoveredResizeBoundary(
-            mouseX, 
-            mouseY, 
-            this.scrollX, 
-            this.scrollY, 
-            this.canvas.width, 
-            this.canvas.height
-        );
-
-        if (boundary.type === 'col') {
-            this.canvas.style.cursor = 'col-resize'; 
-            this.resizeIndex = boundary.index;             
-            this.oldSize = boundary.oldSize; 
-        } else if (boundary.type === 'row') {
-            this.canvas.style.cursor = 'row-resize';
-            this.resizeIndex = boundary.index;
-            this.oldSize = boundary.oldSize;
-        } else {
-            //Normal header will have pointer
-            if ((mouseX > this.rowHeaderWidth && mouseY < this.colHeaderHeight) || 
-                (mouseX < this.rowHeaderWidth && mouseY > this.colHeaderHeight)) {
-                this.canvas.style.cursor = 'pointer';
-            } else {
-                this.canvas.style.cursor = 'default';
-            }
-            this.resizeIndex = -1;
-        }
-
-        
-        if (this.selection.isSelecting && !this.isResizingCol && !this.isResizingRow) {
-            const {row, col} = this.viewportManager.convertToCell(mouseX, mouseY, this.scrollX, this.scrollY);            //console.log(`Mouse MOVE Triggered on CELL ${row},${col}`);
-            if(row >= 0 && col >= 0){
-                //if new cell
-                if (this.selection.endRow !== row || this.selection.endCol !== col) {
-                    this.selection.setEnd(row,col);
-                    this.drawGrid();
-                    this.updateStatusBar();
-                }
-            }
-        }
-    }
-
-
-    private handleMouseUp(): void {
-        //end Col resizing
-        if (this.isResizingCol) {
-            this.isResizingCol = false; 
-            const finalWidth = this.colManager.getWidth(this.resizeIndex);
-
-            if (finalWidth !== this.oldSize) {
-                const command = new ColumnResizeCommand(this.colManager, this.resizeIndex, this.oldSize, finalWidth);
-                this.commandManager.executeCommand(command);
-            }
-        }
-
-        //end Row resizing 
-        if(this.isResizingRow){
-            this.isResizingRow = false;
-            const finalHeight = this.rowManager.getHeight(this.resizeIndex);
-            if(finalHeight !== this.oldSize) {
-                const command = new RowResizeCommand(this.rowManager, this.resizeIndex, this.oldSize,finalHeight);
-                this.commandManager.executeCommand(command);
-            }
-        }
-
-        
-        if (this.selection.isSelecting) {
-            this.selection.finishSelecting();
-        }
     }
 
     private updateSpacer(): void {
@@ -354,15 +146,13 @@ export class Grid {
 
         const bounds = this.selection.getSelection();
 
-        const result = SummaryCalculator.calculate(
+        statusBar!.innerText = SummaryCalculator.calculate(
             this.dataStore,
             bounds.minRow,
             bounds.maxRow,
             bounds.minCol,
             bounds.maxCol
         );
-
-        statusBar!.innerText = result
     }
 
 
@@ -376,8 +166,10 @@ export class Grid {
         this.scrollY = newScrollY;
 
         const container = document.getElementById('grid-container') as HTMLDivElement;
-        container.scrollLeft = this.scrollX;
-        container.scrollTop = this.scrollY;
+        if(container){
+            container.scrollLeft = this.scrollX;
+            container.scrollTop = this.scrollY;
+        }
     } 
 
     private moveSelection(row: number, col: number): void{
