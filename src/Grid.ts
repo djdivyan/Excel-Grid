@@ -165,7 +165,7 @@ export class Grid {
         }
     }
     
-    private handleMouseDown(e: MouseEvent): void {
+    private handleMouseDown(e: PointerEvent): void {
         let rect = this.canvas.getBoundingClientRect();
         //X and Y positions on canvas
         let mouseX = e.clientX - rect.left;
@@ -188,6 +188,16 @@ export class Grid {
         // console.log(`Mouse Down Triggered on CELL ${row},${col}`);
 
         if(row >= 0 && col >= 0){
+            //Select then edit for mobile users
+            const currentBounds = this.selection.getSelection();
+            
+            //Check if the exact same single cell is already selected
+            if (e.pointerType === 'touch' && currentBounds.minRow === row && currentBounds.maxRow === row && currentBounds.minCol === col && currentBounds.maxCol === col) {
+                //User tapped the already active cell so open editer
+                this.handleDoubleClick(e);
+                return; 
+            }
+
             this.selection.setStart(row,col);
             this.drawGrid();
             this.updateStatusBar();

@@ -208,7 +208,7 @@ export class EditManager {
         ul.style.padding = '4px 0';
 
 
-                for (let i = 0; i < formulas.length; i++) {
+         for (let i = 0; i < formulas.length; i++) {
             const formula = formulas[i]!;
             const li = document.createElement('li');
             li.id = `suggestion-item-${i}`;
@@ -226,7 +226,7 @@ export class EditManager {
             };
             
             //Mouse click handling
-            li.onmousedown = (e) => {
+            li.onpointerdown = (e) => {
                 e.preventDefault(); 
                 input.value = `=${formula}`;
                 this.removeSuggestionPopup();
