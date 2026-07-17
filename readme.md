@@ -1,5 +1,8 @@
 # Excel Grid
 
+## Design Note
+[Link to Design Note](design_note.md)
+
 ## Objective
 The objective of this project is to build a high-performance, Excel-like spreadsheet application using TypeScript and HTML5 Canvas. The application demonstrates advanced software architecture by rendering a virtualized grid capable of supporting 100,000 rows and 500 columns, managing state through the Command Pattern, and strictly adhering to Object-Oriented Programming (OOP) and SOLID design principles.
 

@@ -1,7 +1,5 @@
 import { ColumnManager } from "./ColumnManager.js";
 import type { CommandManager } from "./Command/CommandManager.js";
-import { EditCommand } from "./Command/EditCommand.js";
-import { ColumnResizeCommand, RowResizeCommand } from "./Command/ResizeCommands.js";
 import { KeyboardController } from "./Controller/KeyboardController.js";
 import { PointerController } from "./Controller/PointerController.js";
 import type { DataStore } from "./DataStore.js";
