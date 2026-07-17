@@ -113,6 +113,13 @@ Editing uses `EditCommand`, while resize actions use `ColumnResizeCommand` and `
 
 
 ## Test Cases Covered
+For all the formulas ( SUM,COUNT,MIN,MAX,Avg )
+- Should handle range of positive integers and decimals
+- Should handle negative numbers and zero correctly 
+- Should treat empty cells or text values as 0 during calculation
+For formula arguements
+- Should gracefully return a fallback error string for broken ranges
+- Should process lowercase cell coordinates gracefully
 
 
 ## Performance Observations

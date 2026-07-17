@@ -37,7 +37,7 @@ export class FormulaParser {
         for(let r = Math.min(startRow, endRow); r <= Math.max(startRow, endRow); r++) {
             for(let c = Math.min(startCol, endCol); c <= Math.max(startCol, endCol); c++) {
                 const cell = dataStore.getCell(r, c);
-                if (cell && !isNaN(Number(cell.displayValue))) {
+                if (cell && cell.displayValue !== "" && !isNaN(Number(cell.displayValue))) {
                     values.push(Number(cell.displayValue));
                 }
             }
