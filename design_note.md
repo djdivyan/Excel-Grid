@@ -1,6 +1,8 @@
 ## Design Note
 
 ### Component Diagram
+<img width="832" height="571" alt="excel_componentDiagram" src="https://github.com/user-attachments/assets/417da5de-c60c-4acf-a327-1be222dc02b5" />
+<img width="672" height="422" alt="execl-datastore" src="https://github.com/user-attachments/assets/04f82001-0a37-43dc-aa8d-20024eb3f80d" />
 
 
 ### Class Responsibilities
