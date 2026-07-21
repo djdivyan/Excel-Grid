@@ -1,23 +1,23 @@
 import type { ColumnManager } from "../ColumnManager.js";
+import { GridConfig } from "../config/GridConfig.js";
 import type { EditManager } from "../EditManager.js";
+import type { ICoords } from "../interfaces/ICoords.js";
 import type { IPointerAction } from "../interfaces/IPointerAction.js";
 import type { RowManager } from "../RowManager.js";
 import type { Selection } from "../Selection.js";
 import type { ViewportManager } from "../ViewportManager.js";
 
-export class SelectionAction implements IPointerAction {
+export class CellSelectionAction implements IPointerAction {
     constructor(
         private canvas: HTMLCanvasElement,
         private selection: Selection,
         private viewportManager: ViewportManager,
-        private rowManager: RowManager,
-        private colManager: ColumnManager,
         private editManager: EditManager,
         private onRedrawRequired: () => void,
         private onUIUpdateRequired: () => void
     ) {}
 
-    handlePointerDown(e: PointerEvent, mouseX: number, mouseY: number, scrollX: number, scrollY: number): void {
+    handlePointerDown(e: PointerEvent, mouseX: number, mouseY: number, scrollX: number, scrollY: number): boolean {
         //Check for Cell Selection
         const { row, col } = this.viewportManager.convertToCell(mouseX, mouseY, scrollX, scrollY);
 
@@ -32,20 +32,18 @@ export class SelectionAction implements IPointerAction {
                 currentBounds.minCol === col && currentBounds.maxCol === col
             ) {
                 this.handleDoubleClick(e, mouseX, mouseY, scrollX, scrollY);
-                return; 
+                return true; 
             }
 
             this.selection.setStart(row, col);
-        } else if (row >= 0 && col < 0) {
-            this.selection.setStart(row, 0);
-            this.selection.setEnd(row, this.colManager.totalColumns);
-        } else if (row < 0 && col >= 0) {
-            this.selection.setStart(0, col);
-            this.selection.setEnd(this.rowManager.totalRows, col);
+            this.onRedrawRequired();
+            this.onUIUpdateRequired();
+
+            return true;
         }
 
-        this.onRedrawRequired();
-        this.onUIUpdateRequired();
+        return false;
+        
     }
     
     //Handle Active Selection Dragging
@@ -70,12 +68,26 @@ export class SelectionAction implements IPointerAction {
         }
     }
 
-    handleDoubleClick(e: MouseEvent, mouseX: number, mouseY: number, scrollX: number, scrollY: number): void {
+    handleDoubleClick(e: MouseEvent, mouseX: number, mouseY: number, scrollX: number, scrollY: number): boolean {
         const { row, col } = this.viewportManager.convertToCell(mouseX, mouseY, scrollX, scrollY);
         if (row >= 0 && col >= 0) {
             const rect = this.canvas.getBoundingClientRect();
             //show a dynamic input box
             this.editManager.showEditor(row, col, scrollX, scrollY, rect);
+
+            return true;
         }
+
+        return false;
+    }
+
+
+    setCursor(coords: ICoords, canvasWidth: number, canvasHeight: number): boolean {
+        
+        if ((coords.x > GridConfig.dimensions.rowHeaderWidth && coords.y > GridConfig.dimensions.colHeaderHeight) && (coords.x < canvasWidth && coords.y < canvasHeight)) {
+                this.canvas.style.cursor = 'cell';
+                return true
+        } 
+        return false;  
     }
 }

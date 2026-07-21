@@ -1,9 +1,12 @@
-import { ResizeAction } from "../Actions/ResizeAction.js";
-import { SelectionAction } from "../Actions/SelectionAction.js";
+import { CellSelectionAction } from "../Actions/CellSelectionAction.js";
+import { ColResizeAction } from "../Actions/ColResizeAction.js";
+import { ColSelectionAction } from "../Actions/ColSelectionAction.js";
+import { RowResizeAction } from "../Actions/RowResizeAction.js";
+import { RowSelectionAction } from "../Actions/RowSelectionAction.js";
 import type { ColumnManager } from "../ColumnManager.js";
 import type { CommandManager } from "../Command/CommandManager.js";
-import { ColumnResizeCommand, RowResizeCommand } from "../Command/ResizeCommands.js";
 import type { EditManager } from "../EditManager.js";
+import type { ICoords } from "../interfaces/ICoords.js";
 import type { IPointerAction } from "../interfaces/IPointerAction.js";
 import type { RowManager } from "../RowManager.js";
 import type { Selection } from "../Selection.js";
@@ -11,12 +14,9 @@ import type { ViewportManager } from "../ViewportManager.js";
 
 //Using Strategy pattern to track hover state and then call that states move,up, down methods
 export class PointerController {
-    //Strategies
-    private resizeAction: ResizeAction;
-    private selectionAction: SelectionAction;
-
     //Tracks whichever action the user is currently performing
     private activeAction: IPointerAction | null = null;
+    private handlers: IPointerAction[] = []; 
 
     constructor(
         private canvas: HTMLCanvasElement,
@@ -32,21 +32,38 @@ export class PointerController {
         onRedrawRequired: () => void,
         onUIUpdateRequired: () => void
     ) {
-        this.resizeAction = new ResizeAction(
-            canvas, colManager, rowManager, viewportManager, commandManager, 
+        //Registering Handlers
+        this.addHandlers(new RowResizeAction(
+            canvas, rowManager, viewportManager, commandManager, 
             onRedrawRequired, onUIUpdateRequired
-        );
-        
-        this.selectionAction = new SelectionAction(
-            canvas, selection, viewportManager, rowManager, colManager, editManager, 
+        ));
+        this.addHandlers( new ColResizeAction(
+            canvas, colManager, viewportManager, commandManager, 
             onRedrawRequired, onUIUpdateRequired
-        );
+        ));
+        //Selection Handlers
+        this.addHandlers(new CellSelectionAction(
+            canvas, selection, viewportManager, editManager, 
+            onRedrawRequired, onUIUpdateRequired
+        ));
+        this.addHandlers(new ColSelectionAction(
+            canvas, selection, viewportManager, rowManager, 
+            onRedrawRequired, onUIUpdateRequired
+        ));
+        this.addHandlers(new RowSelectionAction(
+            canvas, selection, viewportManager, colManager, 
+            onRedrawRequired, onUIUpdateRequired
+        ));
 
         this.startEvents();
     }
 
-    public setStrategy(action: IPointerAction): void{
+    public setActiveAction(action: IPointerAction): void{
         this.activeAction = action;
+    }
+
+    public addHandlers(action: IPointerAction): void{
+       this.handlers.push(action);
     }
     
     //down,move and up
@@ -62,47 +79,36 @@ export class PointerController {
         //get X and Y positions on canva via getcoord
         const { x, y, scroll } = this.getCoords(e);
 
-        //choosing which strategy to use based on the cursor
-        if (this.canvas.style.cursor.includes('resize')) {
-            this.setStrategy(this.resizeAction);
-        } else {
-            this.setStrategy(this.selectionAction);
+        //choosing which strategy to use
+        for (const handler of this.handlers) {
+            if (handler.handlePointerDown(e, x, y, scroll.x, scroll.y)) {
+                this.activeAction = handler;
+                return;
+            }
         }
 
-        this.activeAction!.handlePointerDown(e, x, y, scroll.x, scroll.y);
+        // this.activeAction!.handlePointerDown(e, x, y, scroll.x, scroll.y);
     }
 
     private handlePointerMove(e: PointerEvent): void {
         
         //get X and Y positions on canva via getcoord
-        const { x, y, scroll } = this.getCoords(e);
+        const coords: ICoords = this.getCoords(e);
 
         //Resizing or selection
         //if we are currently dragging, route the event to the active action
         if (this.activeAction) {
-            this.activeAction.handlePointerMove(e, x, y, scroll.x, scroll.y);
+            this.activeAction.handlePointerMove(e, coords.x, coords.y, coords.scroll.x, coords.scroll.y);
             return;
         }
 
         //if no action is active, we manage the Hover state cursors
-        //Calling viewport for hoverboundry calc
-        const boundary = this.viewportManager.getHoveredResizeBoundary(
-            x, y, scroll.x, scroll.y, this.canvas.width, this.canvas.height
-        );
-
-        if (boundary.type === 'col') {
-            this.canvas.style.cursor = 'col-resize'; 
-        } else if (boundary.type === 'row') {
-            this.canvas.style.cursor = 'row-resize';
-        } else {
-            //Normal header will have pointer
-            if ((x > this.rowHeaderWidth && y < this.colHeaderHeight) || 
-                (x < this.rowHeaderWidth && y > this.colHeaderHeight)) {
-                this.canvas.style.cursor = 'pointer';
-            } else {
-                this.canvas.style.cursor = 'default';
+        for (const handler of this.handlers) {
+            if (handler.setCursor && handler.setCursor(coords,this.canvas.width,this.canvas.height)) {
+                return;
             }
         }
+        this.canvas.style.cursor = "defualt";
     }
 
     private handlePointerUp(): void {
@@ -114,11 +120,16 @@ export class PointerController {
 
     private handleDoubleClick(e: MouseEvent): void {
         //get X and Y positions on canva via getcoord
-        const { x, y, scroll } = this.getCoords(e);
-        this.selectionAction.handleDoubleClick(e, x, y, scroll.x, scroll.y);
+        const coords: ICoords = this.getCoords(e);
+
+        for (const handler of this.handlers) {
+            if (handler.handleDoubleClick && handler.handleDoubleClick(e, coords.x, coords.y, coords.scroll.x, coords.scroll.y)) {
+                return;
+            }
+        }    
     }
 
-    private getCoords(e: MouseEvent | PointerEvent) {
+    private getCoords(e: MouseEvent | PointerEvent) : ICoords{
         const rect = this.canvas.getBoundingClientRect();
         return {
             x: e.clientX - rect.left,

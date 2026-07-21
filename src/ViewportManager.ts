@@ -50,46 +50,6 @@ export class ViewportManager {
         return { row: rowIdx, col: colIdx };
     }
 
-    //resize hover detection in mouse events
-    public getHoveredResizeBoundary(mouseX: number, mouseY: number, scrollX: number, scrollY: number, canvasWidth: number, canvasHeight: number): { type: 'col' | 'row' | 'none', index: number, oldSize: number } {
-        
-        //for column header hover
-        if (mouseX > this.rowHeaderWidth && mouseY < this.colHeaderHeight) {
-            let currentX = 0;
-            let colIndex = 0;
-
-            while (currentX - scrollX <= canvasWidth && colIndex < this.colManager.totalColumns) {
-                //visible onscreen
-                if (currentX + this.colManager.getWidth(colIndex) >= scrollX) {
-                    let rightEdge = (currentX - scrollX) + this.rowHeaderWidth + this.colManager.getWidth(colIndex);
-                    //check mouse within 4 px of edge
-                    if (Math.abs(mouseX - rightEdge) < 4) {
-                        return { type: 'col', index: colIndex, oldSize: this.colManager.getWidth(colIndex) };
-                    }
-                }
-                currentX += this.colManager.getWidth(colIndex);
-                colIndex++;
-            }
-        }
-
-         //row header hover
-        if (mouseX < this.rowHeaderWidth && mouseY > this.colHeaderHeight) {
-            let currentY = 0;
-            let rowIndex = 0;
-
-            while (currentY - scrollY <= canvasHeight && rowIndex < this.rowManager.totalRows) {
-                if (currentY + this.rowManager.getHeight(rowIndex) >= scrollY) {
-                    let bottomEdge = (currentY - scrollY) + this.colHeaderHeight + this.rowManager.getHeight(rowIndex);
-                    if (Math.abs(mouseY - bottomEdge) < 4) {
-                        return { type: 'row', index: rowIndex, oldSize: this.rowManager.getHeight(rowIndex) };
-                    }
-                }
-                currentY += this.rowManager.getHeight(rowIndex);
-                rowIndex++;
-            }
-        }
-        return { type: 'none', index: -1, oldSize: 0 };
-    }
 
     //scroll for arrow navigation
     public calcScrollToMakeCellVisible( row: number, col: number, currentScrollX: number, currentScrollY: number, canvasWidth: number, canvasHeight: number ): { newScrollX: number, newScrollY: number } {
