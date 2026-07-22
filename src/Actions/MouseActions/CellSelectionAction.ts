@@ -1,11 +1,11 @@
-import type { ColumnManager } from "../ColumnManager.js";
-import { GridConfig } from "../config/GridConfig.js";
-import type { EditManager } from "../EditManager.js";
-import type { ICoords } from "../interfaces/ICoords.js";
-import type { IPointerAction } from "../interfaces/IPointerAction.js";
-import type { RowManager } from "../RowManager.js";
-import type { Selection } from "../Selection.js";
-import type { ViewportManager } from "../ViewportManager.js";
+import type { ColumnManager } from "../../ColumnManager.js";
+import { GridConfig } from "../../config/GridConfig.js";
+import type { EditManager } from "../../EditManager.js";
+import type { ICoords } from "../../interfaces/ICoords.js";
+import type { IPointerAction } from "../../interfaces/IPointerAction.js";
+import type { RowManager } from "../../RowManager.js";
+import type { Selection } from "../../Selection.js";
+import type { ViewportManager } from "../../ViewportManager.js";
 
 export class CellSelectionAction implements IPointerAction {
     constructor(

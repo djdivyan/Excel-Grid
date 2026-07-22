@@ -1,9 +1,16 @@
+import { EnterKeyAction } from "../Actions/KeyboardActions/EnterKeyAction.js";
+import { EscapeKeyAction } from "../Actions/KeyboardActions/EscapeKeyAction.js";
+import { NavigationKeyAction } from "../Actions/KeyboardActions/NavigationKeyAction.js";
 import type { ColumnManager } from "../ColumnManager.js";
 import type { EditManager } from "../EditManager.js";
+import type { IKeyboardAction } from "../interfaces/IkeyboardAction.js";
 import type { RowManager } from "../RowManager.js";
 import type { Selection } from "../Selection.js";
 
 export class KeyboardController {
+
+    private handlers: IKeyboardAction[] = [];
+
     constructor(
         private canvas: HTMLCanvasElement,
         private selection: Selection,
@@ -14,51 +21,30 @@ export class KeyboardController {
         private moveSelection: (row: number, col: number) => void,
         private onRedrawRequired: () => void
     ) {
+
+        this.addHandler(new EscapeKeyAction(editManager, onRedrawRequired));
+        this.addHandler(new EnterKeyAction(canvas, editManager, selection, getScroll));
+        this.addHandler(new NavigationKeyAction(editManager, selection, rowManager, colManager, moveSelection));
+
+
         this.bindEvents();
     }
 
+    public addHandler(action: IKeyboardAction): void {
+        this.handlers.push(action);
+    }
+
     private bindEvents() {
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                this.onRedrawRequired();
-                //Commit any edited data
-                if (this.editManager.isEditing()) {
-                    this.editManager.blurEditor(); 
-                }
-                return;
-            } 
-            
-            //Enter to edit
-            if (e.key === 'Enter' && !this.editManager.isEditing()) {
-                e.preventDefault();
-                const { minRow, minCol } = this.selection.getSelection();
-                if (minRow >= 0 && minCol >= 0) {
-                    const rect = this.canvas.getBoundingClientRect();
-                    const scroll = this.getScroll();
-                    this.editManager.showEditor(minRow, minCol, scroll.x, scroll.y, rect);
-                }
+        window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+    }
+
+
+    private handleKeyDown(e: KeyboardEvent): void {
+        // Loop through strategies
+        for (const handler of this.handlers) {
+            if (handler.handleKeyDown(e)) {
                 return;
             }
-
-            //Ignore arrow keys if the user is typing in the input box
-            if (this.editManager.isEditing()) return;
-
-            const { minRow, minCol } = this.selection.getSelection();
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                if (minRow < this.rowManager.totalRows - 1) this.moveSelection(minRow + 1, minCol);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                if (minRow > 0) this.moveSelection(minRow - 1, minCol);
-            } else if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                if (minCol > 0) this.moveSelection(minRow, minCol - 1);
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                if (minRow < this.colManager.totalColumns - 1) this.moveSelection(minRow, minCol + 1);
-            } 
-        });
+        }
     }
 }

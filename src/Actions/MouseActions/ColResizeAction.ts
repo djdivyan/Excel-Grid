@@ -1,10 +1,10 @@
-import type { ColumnManager } from "../ColumnManager.js";
-import type { CommandManager } from "../Command/CommandManager.js";
-import { ColumnResizeCommand, RowResizeCommand } from "../Command/ResizeCommands.js";
-import { GridConfig } from "../config/GridConfig.js";
-import type { ICoords } from "../interfaces/ICoords.js";
-import type { IPointerAction } from "../interfaces/IPointerAction.js";
-import type { ViewportManager } from "../ViewportManager.js";
+import type { ColumnManager } from "../../ColumnManager.js";
+import type { CommandManager } from "../../Command/CommandManager.js";
+import { ColumnResizeCommand, RowResizeCommand } from "../../Command/ResizeCommands.js";
+import { GridConfig } from "../../config/GridConfig.js";
+import type { ICoords } from "../../interfaces/ICoords.js";
+import type { IPointerAction } from "../../interfaces/IPointerAction.js";
+import type { ViewportManager } from "../../ViewportManager.js";
 
 export class ColResizeAction implements IPointerAction {
     private isResizingCol: boolean = false;

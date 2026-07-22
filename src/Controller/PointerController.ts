@@ -1,8 +1,8 @@
-import { CellSelectionAction } from "../Actions/CellSelectionAction.js";
-import { ColResizeAction } from "../Actions/ColResizeAction.js";
-import { ColSelectionAction } from "../Actions/ColSelectionAction.js";
-import { RowResizeAction } from "../Actions/RowResizeAction.js";
-import { RowSelectionAction } from "../Actions/RowSelectionAction.js";
+import { CellSelectionAction } from "../Actions/MouseActions/CellSelectionAction.js";
+import { ColResizeAction } from "../Actions/MouseActions/ColResizeAction.js";
+import { ColSelectionAction } from "../Actions/MouseActions/ColSelectionAction.js";
+import { RowResizeAction } from "../Actions/MouseActions/RowResizeAction.js";
+import { RowSelectionAction } from "../Actions/MouseActions/RowSelectionAction.js";
 import type { ColumnManager } from "../ColumnManager.js";
 import type { CommandManager } from "../Command/CommandManager.js";
 import type { EditManager } from "../EditManager.js";
